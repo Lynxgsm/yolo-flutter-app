@@ -109,6 +109,12 @@ public class MethodCallHandler implements MethodChannel.MethodCallHandler {
             case "setZoomRatio":
                 setScaleFactor(call, result);
                 break;
+            case "startRecording":
+                startRecording(call, result);
+                break;
+            case "stopRecording":
+                stopRecording(call, result);
+                break;
             default:
                 result.notImplemented();
                 break;
@@ -345,6 +351,32 @@ public class MethodCallHandler implements MethodChannel.MethodCallHandler {
         if (factorObject != null) {
             final double factor = (double) factorObject;
             cameraPreview.setScaleFactor(factor);
+        }
+    }
+
+    private void startRecording(MethodCall call, MethodChannel.Result result) {
+        try {
+            String response = cameraPreview.startRecording();
+            if (response.startsWith("Error")) {
+                result.error("RECORDING_ERROR", response, null);
+            } else {
+                result.success("Success");
+            }
+        } catch (Exception e) {
+            result.error("RECORDING_ERROR", "Failed to start recording: " + e.getMessage(), null);
+        }
+    }
+
+    private void stopRecording(MethodCall call, MethodChannel.Result result) {
+        try {
+            String response = cameraPreview.stopRecording();
+            if (response.startsWith("Error")) {
+                result.error("RECORDING_ERROR", response, null);
+            } else {
+                result.success("Success");
+            }
+        } catch (Exception e) {
+            result.error("RECORDING_ERROR", "Failed to stop recording: " + e.getMessage(), null);
         }
     }
 }

@@ -47,14 +47,15 @@ class UltralyticsYoloCameraController
       // Update state first to show loading state if needed
       final newLensDirection = value.lensDirection == 0 ? 1 : 0;
       value = value.copyWith(lensDirection: newLensDirection);
-      
+
       // Request camera switch
-      final result = await _ultralyticsYoloPlatform.setLensDirection(newLensDirection);
-      
-      if (result != "Success") {
+      final result =
+          await _ultralyticsYoloPlatform.setLensDirection(newLensDirection);
+
+      if (result != 'Success') {
         // Revert state if failed
         value = value.copyWith(lensDirection: value.lensDirection == 0 ? 1 : 0);
-        throw Exception("Failed to switch camera: $result");
+        throw Exception('Failed to switch camera: $result');
       }
     } catch (e) {
       // Handle errors and revert state
@@ -71,6 +72,30 @@ class UltralyticsYoloCameraController
   /// Closes the camera
   Future<void> closeCamera() async {
     await _ultralyticsYoloPlatform.closeCamera();
+  }
+
+  // Start recording
+  Future<void> startRecording() async {
+    try {
+      final result = await _ultralyticsYoloPlatform.startRecording();
+      if (result != 'Success') {
+        throw Exception('Failed to start recording: $result');
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  // Stop recording
+  Future<void> stopRecording() async {
+    try {
+      final result = await _ultralyticsYoloPlatform.stopRecording();
+      if (result != 'Success') {
+        throw Exception('Failed to stop recording: $result');
+      }
+    } catch (e) {
+      rethrow;
+    }
   }
 
   /// Starts the camera

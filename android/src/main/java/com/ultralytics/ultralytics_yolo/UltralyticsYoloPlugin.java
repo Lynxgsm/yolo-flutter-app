@@ -36,6 +36,10 @@ public class UltralyticsYoloPlugin implements FlutterPlugin, ActivityAware {
 
     @Override
     public void onDetachedFromEngine(@NonNull FlutterPluginBinding binding) {
+        // Call shutdown to ensure recording properly stops if active
+        if (cameraPreview != null) {
+            cameraPreview.shutdown();
+        }
         flutterPluginBinding = null;
     }
 
