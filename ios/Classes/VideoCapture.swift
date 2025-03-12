@@ -183,7 +183,8 @@ public class VideoCapture: NSObject {
       let ciImage = CIImage(cvPixelBuffer: imageBuffer)
       
       // Convert to JPEG data
-      if let context = CIContext(), let jpegData = context.jpegRepresentation(of: ciImage, colorSpace: CGColorSpaceCreateDeviceRGB()) {
+      let context = CIContext()
+      if let jpegData = context.jpegRepresentation(of: ciImage, colorSpace: CGColorSpaceCreateDeviceRGB()) {
         // Get frame metadata
         let width = CVPixelBufferGetWidth(imageBuffer)
         let height = CVPixelBufferGetHeight(imageBuffer)
