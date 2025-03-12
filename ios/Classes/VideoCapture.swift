@@ -31,9 +31,11 @@ public class VideoCapture: NSObject {
   public let captureSession = AVCaptureSession()
   let videoOutput = AVCaptureVideoDataOutput()
   let photoOutput = AVCapturePhotoOutput()
+  let movieFileOutput = AVCaptureMovieFileOutput()
   let cameraQueue = DispatchQueue(label: "camera-queue")
   public var lastCapturedPhoto: UIImage?
   public weak var nativeView: FLNativeView?
+  private var isRecording = false
 
   public override init() {
     super.init()
@@ -103,6 +105,12 @@ public class VideoCapture: NSObject {
           self.captureSession.addOutput(self.photoOutput)
           print("DEBUG: Added photo output")
         }
+        
+        // Add movie file output for recording
+        if self.captureSession.canAddOutput(self.movieFileOutput) {
+          self.captureSession.addOutput(self.movieFileOutput)
+          print("DEBUG: Added movie file output")
+        }
 
         let connection = self.videoOutput.connection(with: .video)
         connection?.videoOrientation = .portrait
@@ -148,6 +156,45 @@ public class VideoCapture: NSObject {
       }
     }
   }
+  
+  // MARK: - Recording Methods
+  
+  public func startRecording() -> String {
+    if isRecording {
+      return "Error: Already recording"
+    }
+    
+    if !captureSession.isRunning {
+      return "Error: Camera not running"
+    }
+    
+    // Create a unique file path in the temporary directory
+    let dateFormatter = DateFormatter()
+    dateFormatter.dateFormat = "yyyyMMdd-HHmmss"
+    let timestamp = dateFormatter.string(from: Date())
+    let tempDirectory = NSTemporaryDirectory()
+    let filePath = URL(fileURLWithPath: tempDirectory).appendingPathComponent("yolo_recording_\(timestamp).mp4")
+
+    print("DEBUG: Starting recording to \(filePath.path)")
+    
+    // Start recording
+    movieFileOutput.startRecording(to: filePath, recordingDelegate: self)
+    isRecording = true
+    
+    return "Success"
+  }
+  
+  public func stopRecording() -> String {
+    if !isRecording {
+      return "Error: Not recording"
+    }
+    
+    print("DEBUG: Stopping recording")
+    movieFileOutput.stopRecording()
+    // isRecording will be set to false in the fileOutput delegate method
+    
+    return "Success"
+  }
 }
 
 extension VideoCapture: AVCaptureVideoDataOutputSampleBufferDelegate {
@@ -172,5 +219,34 @@ extension VideoCapture: AVCapturePhotoCaptureDelegate {
 
     self.lastCapturedPhoto = image
     print("DEBUG: Photo captured successfully")
+  }
+}
+
+extension VideoCapture: AVCaptureFileOutputRecordingDelegate {
+  public func fileOutput(_ output: AVCaptureFileOutput, didStartRecordingTo fileURL: URL, from connections: [AVCaptureConnection]) {
+    print("DEBUG: Recording started to \(fileURL.path)")
+  }
+  
+  public func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo outputFileURL: URL, from connections: [AVCaptureConnection], error: Error?) {
+    isRecording = false
+    
+    if let error = error {
+      print("DEBUG: Recording error: \(error.localizedDescription)")
+      return
+    }
+    
+    print("DEBUG: Recording finished successfully to \(outputFileURL.path)")
+    
+    // If you want to save to the photo library, you can add that functionality here
+    // UISaveVideoAtPathToSavedPhotosAlbum(outputFileURL.path, self, #selector(video(_:didFinishSavingWithError:contextInfo:)), nil)
+  }
+  
+  // Optional callback for saving to the photo library
+  @objc func video(_ videoPath: String, didFinishSavingWithError error: Error?, contextInfo: UnsafeRawPointer) {
+    if let error = error {
+      print("DEBUG: Error saving video to photo library: \(error.localizedDescription)")
+    } else {
+      print("DEBUG: Video saved to photo library successfully")
+    }
   }
 }

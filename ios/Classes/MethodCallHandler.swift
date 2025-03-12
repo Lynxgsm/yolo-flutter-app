@@ -71,6 +71,10 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
       closeCamera(args: args, result: result)
     case "detectImage", "classifyImage":
       predictOnImage(args: args, result: result)
+    case "startRecording":
+      startRecording(args: args, result: result)
+    case "stopRecording":
+      stopRecording(args: args, result: result)
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -205,6 +209,25 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
 
     predictor?.predictOnImage(image: image) { recognitions in
       result(recognitions)
+    }
+  }
+
+  // MARK: - Video Recording Methods
+  private func startRecording(args: [String: Any], result: @escaping FlutterResult) {
+    let response = videoCapture.startRecording()
+    if response.starts(with: "Error") {
+      result(FlutterError(code: "RECORDING_ERROR", message: response, details: nil))
+    } else {
+      result("Success")
+    }
+  }
+  
+  private func stopRecording(args: [String: Any], result: @escaping FlutterResult) {
+    let response = videoCapture.stopRecording()
+    if response.starts(with: "Error") {
+      result(FlutterError(code: "RECORDING_ERROR", message: response, details: nil))
+    } else {
+      result("Success")
     }
   }
 
