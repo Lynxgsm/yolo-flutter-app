@@ -109,6 +109,18 @@ public class MethodCallHandler implements MethodChannel.MethodCallHandler {
             case "setZoomRatio":
                 setScaleFactor(call, result);
                 break;
+            case "startRecording":
+                startRecording(call, result);
+                break;
+            case "stopRecording":
+                stopRecording(call, result);
+                break;
+            case "startFrameStream":
+                startFrameStream(call, result);
+                break;
+            case "stopFrameStream":
+                stopFrameStream(call, result);
+                break;
             default:
                 result.notImplemented();
                 break;
@@ -345,6 +357,34 @@ public class MethodCallHandler implements MethodChannel.MethodCallHandler {
         if (factorObject != null) {
             final double factor = (double) factorObject;
             cameraPreview.setScaleFactor(factor);
+        }
+    }
+
+    private void startRecording(MethodCall call, MethodChannel.Result result) {
+        // Implementation needed
+        result.notImplemented();
+    }
+
+    private void stopRecording(MethodCall call, MethodChannel.Result result) {
+        // Implementation needed
+        result.notImplemented();
+    }
+
+    private void startFrameStream(MethodCall call, MethodChannel.Result result) {
+        try {
+            cameraPreview.startFrameStream();
+            result.success("Success");
+        } catch (Exception e) {
+            result.error("FRAME_STREAM_ERROR", "Failed to start frame stream: " + e.getMessage(), null);
+        }
+    }
+
+    private void stopFrameStream(MethodCall call, MethodChannel.Result result) {
+        try {
+            cameraPreview.stopFrameStream();
+            result.success("Success");
+        } catch (Exception e) {
+            result.error("FRAME_STREAM_ERROR", "Failed to stop frame stream: " + e.getMessage(), null);
         }
     }
 }

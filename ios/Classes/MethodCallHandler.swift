@@ -10,11 +10,12 @@ import Flutter
 import Foundation
 
 public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeListener,
-  ResultsListener, FpsRateListener
+  ResultsListener, FpsRateListener, FrameStreamDelegate
 {
   private let resultStreamHandler: ResultStreamHandler
   private let inferenceTimeStreamHandler: TimeStreamHandler
   private let fpsRateStreamHandler: TimeStreamHandler
+  private let frameStreamHandler: FrameStreamHandler
   private var predictor: Predictor?
   private let videoCapture: VideoCapture
 
@@ -25,6 +26,7 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
     self.resultStreamHandler = ResultStreamHandler()
     self.inferenceTimeStreamHandler = TimeStreamHandler()
     self.fpsRateStreamHandler = TimeStreamHandler()
+    self.frameStreamHandler = FrameStreamHandler()
 
     super.init()
 
@@ -46,9 +48,16 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
       binaryMessenger: binaryMessenger
     )
     fpsRateEventChannel.setStreamHandler(fpsRateStreamHandler)
+    
+    let frameEventChannel = FlutterEventChannel(
+      name: "ultralytics_yolo_frame_stream",
+      binaryMessenger: binaryMessenger
+    )
+    frameEventChannel.setStreamHandler(frameStreamHandler)
 
-    // Set up video capture delegate
+    // Set up delegates
     videoCapture.delegate = self
+    videoCapture.frameDelegate = self
   }
 
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
@@ -71,6 +80,14 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
       closeCamera(args: args, result: result)
     case "detectImage", "classifyImage":
       predictOnImage(args: args, result: result)
+    case "startRecording":
+      startRecording(args: args, result: result)
+    case "stopRecording":
+      stopRecording(args: args, result: result)
+    case "startFrameStream":
+      startFrameStream(args: args, result: result)
+    case "stopFrameStream":
+      stopFrameStream(args: args, result: result)
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -86,6 +103,11 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
       onInferenceTime: self,
       onFpsRate: self
     )
+  }
+  
+  // MARK: - FrameStreamDelegate
+  public func videoCapture(_ capture: VideoCapture, didCaptureFrameAsData frameData: [String: Any]) {
+    frameStreamHandler.sink(frameData: frameData)
   }
 
   // MARK: - Model Loading and Configuration
@@ -208,6 +230,44 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
     }
   }
 
+  // MARK: - Video Recording Methods
+  private func startRecording(args: [String: Any], result: @escaping FlutterResult) {
+    let response = videoCapture.startRecording()
+    if response.starts(with: "Error") {
+      result(FlutterError(code: "RECORDING_ERROR", message: response, details: nil))
+    } else {
+      result("Success")
+    }
+  }
+  
+  private func stopRecording(args: [String: Any], result: @escaping FlutterResult) {
+    let response = videoCapture.stopRecording()
+    if response.starts(with: "Error") {
+      result(FlutterError(code: "RECORDING_ERROR", message: response, details: nil))
+    } else {
+      result("Success")
+    }
+  }
+  
+  // MARK: - Frame Streaming Methods
+  private func startFrameStream(args: [String: Any], result: @escaping FlutterResult) {
+    let response = videoCapture.startFrameStream()
+    if response.starts(with: "Error") {
+      result(FlutterError(code: "FRAME_STREAM_ERROR", message: response, details: nil))
+    } else {
+      result("Success")
+    }
+  }
+  
+  private func stopFrameStream(args: [String: Any], result: @escaping FlutterResult) {
+    let response = videoCapture.stopFrameStream()
+    if response.starts(with: "Error") {
+      result(FlutterError(code: "FRAME_STREAM_ERROR", message: response, details: nil))
+    } else {
+      result("Success")
+    }
+  }
+
   // MARK: - Listener Methods
   public func on(predictions: [[String: Any]]) {
     resultStreamHandler.sink(objects: predictions)
@@ -219,5 +279,26 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
 
   public func on(fpsRate: Double) {
     fpsRateStreamHandler.sink(time: fpsRate)
+  }
+}
+
+// MARK: - Frame Stream Handler
+public class FrameStreamHandler: NSObject, FlutterStreamHandler {
+  private var eventSink: FlutterEventSink?
+  
+  public func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
+    self.eventSink = events
+    return nil
+  }
+  
+  public func onCancel(withArguments arguments: Any?) -> FlutterError? {
+    self.eventSink = nil
+    return nil
+  }
+  
+  public func sink(frameData: [String: Any]) {
+    if let eventSink = eventSink {
+      eventSink(frameData)
+    }
   }
 }

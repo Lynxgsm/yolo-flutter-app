@@ -9,6 +9,7 @@ import io.flutter.embedding.engine.plugins.FlutterPlugin;
 import io.flutter.embedding.engine.plugins.activity.ActivityAware;
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding;
 import io.flutter.plugin.common.BinaryMessenger;
+import io.flutter.plugin.common.EventChannel;
 import io.flutter.plugin.common.MethodChannel;
 
 /**
@@ -17,6 +18,7 @@ import io.flutter.plugin.common.MethodChannel;
 public class UltralyticsYoloPlugin implements FlutterPlugin, ActivityAware {
     private FlutterPluginBinding flutterPluginBinding;
     private CameraPreview cameraPreview;
+    private FrameStreamHandler frameStreamHandler;
 
     @Override
     public void onAttachedToEngine(@NonNull FlutterPluginBinding binding) {
@@ -26,6 +28,11 @@ public class UltralyticsYoloPlugin implements FlutterPlugin, ActivityAware {
         Context context = flutterPluginBinding.getApplicationContext();
 
         cameraPreview = new CameraPreview(context);
+        
+        // Set up frame stream handler
+        frameStreamHandler = new FrameStreamHandler(cameraPreview);
+        new EventChannel(binaryMessenger, "ultralytics_yolo_frame_stream")
+                .setStreamHandler(frameStreamHandler);
 
         MethodCallHandler methodCallHandler = new MethodCallHandler(
                 binaryMessenger,
@@ -36,6 +43,10 @@ public class UltralyticsYoloPlugin implements FlutterPlugin, ActivityAware {
 
     @Override
     public void onDetachedFromEngine(@NonNull FlutterPluginBinding binding) {
+        // Call shutdown to ensure recording properly stops if active
+        if (cameraPreview != null) {
+            cameraPreview.shutdown();
+        }
         flutterPluginBinding = null;
     }
 
@@ -61,5 +72,25 @@ public class UltralyticsYoloPlugin implements FlutterPlugin, ActivityAware {
     @Override
     public void onDetachedFromActivity() {
 
+    }
+    
+    // Handler for frame streaming events
+    static class FrameStreamHandler implements EventChannel.StreamHandler {
+        private final CameraPreview cameraPreview;
+
+        FrameStreamHandler(CameraPreview cameraPreview) {
+            this.cameraPreview = cameraPreview;
+        }
+
+        @Override
+        public void onListen(Object arguments, EventChannel.EventSink events) {
+            cameraPreview.setFrameStreamSink(events);
+        }
+
+        @Override
+        public void onCancel(Object arguments) {
+            cameraPreview.setFrameStreamSink(null);
+            cameraPreview.stopFrameStream();
+        }
     }
 }

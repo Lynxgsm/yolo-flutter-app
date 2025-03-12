@@ -25,6 +25,10 @@ class PlatformChannelUltralyticsYolo implements UltralyticsYoloPlatform {
   @visibleForTesting
   final fpsRateEventChannel = const EventChannel('ultralytics_yolo_fps_rate');
 
+  /// The event channel used to stream camera frames
+  @visibleForTesting
+  final frameEventChannel = const EventChannel('ultralytics_yolo_frame_stream');
+
   @override
   Future<String?> loadModel(
     Map<String, dynamic> model, {
@@ -102,8 +106,11 @@ class PlatformChannelUltralyticsYolo implements UltralyticsYoloPlatform {
           result = result as List;
 
           for (final dynamic json in result) {
-            objects.add(ClassificationResult.fromJson(
-                Map<String, dynamic>.from(json as Map),),);
+            objects.add(
+              ClassificationResult.fromJson(
+                Map<String, dynamic>.from(json as Map),
+              ),
+            );
           }
 
           return objects;
@@ -121,6 +128,31 @@ class PlatformChannelUltralyticsYolo implements UltralyticsYoloPlatform {
       .map((rate) => (rate as num).toDouble());
 
   @override
+  Stream<Map<String, dynamic>> get frameStream => frameEventChannel
+      .receiveBroadcastStream()
+      .map((frame) => Map<String, dynamic>.from(frame as Map));
+
+  @override
+  Future<String?> startFrameStream() => methodChannel
+      .invokeMethod<String>('startFrameStream')
+      .catchError((dynamic e) => e.toString());
+
+  @override
+  Future<String?> stopFrameStream() => methodChannel
+      .invokeMethod<String>('stopFrameStream')
+      .catchError((dynamic e) => e.toString());
+
+  @override
+  Future<String?> startRecording() => methodChannel
+      .invokeMethod<String>('startRecording')
+      .catchError((dynamic e) => e.toString());
+
+  @override
+  Future<String?> stopRecording() => methodChannel
+      .invokeMethod<String>('stopRecording')
+      .catchError((dynamic e) => e.toString());
+
+  @override
   Future<List<ClassificationResult?>?> classifyImage(String imagePath) async {
     final result =
         await methodChannel.invokeMethod<List<Object?>>('classifyImage', {
@@ -132,8 +164,11 @@ class PlatformChannelUltralyticsYolo implements UltralyticsYoloPlatform {
     final objects = <ClassificationResult>[];
 
     result?.forEach((json) {
-      objects.add(ClassificationResult.fromJson(
-          Map<String, dynamic>.from(json! as Map),),);
+      objects.add(
+        ClassificationResult.fromJson(
+          Map<String, dynamic>.from(json! as Map),
+        ),
+      );
     });
 
     return objects;

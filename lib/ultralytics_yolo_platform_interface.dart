@@ -108,4 +108,29 @@ abstract class UltralyticsYoloPlatform extends PlatformInterface {
   Stream<double>? get fpsRateStream {
     throw UnimplementedError('fpsRateStream has not been implemented.');
   }
+
+  /// Stream of camera frames.
+  Stream<Map<String, dynamic>> get frameStream {
+    throw UnimplementedError('frameStream has not been implemented.');
+  }
+
+  /// Start streaming camera frames.
+  Future<String?> startFrameStream() {
+    throw UnimplementedError('startFrameStream has not been implemented.');
+  }
+
+  /// Stop streaming camera frames.
+  Future<String?> stopFrameStream() {
+    throw UnimplementedError('stopFrameStream has not been implemented.');
+  }
+
+  /// Start recording video with object detection overlays
+  Future<String?> startRecording() {
+    throw UnimplementedError('startRecording has not been implemented.');
+  }
+
+  /// Stop recording video and save the file
+  Future<String?> stopRecording() {
+    throw UnimplementedError('stopRecording has not been implemented.');
+  }
 }
