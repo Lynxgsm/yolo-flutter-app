@@ -63,6 +63,12 @@ class _UltralyticsYoloCameraPreviewState
 
   @override
   Widget build(BuildContext context) {
+    // Fix orientation
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+
     return ValueListenableBuilder<UltralyticsYoloCameraValue>(
       valueListenable: widget.controller,
       builder: (context, value, child) {
