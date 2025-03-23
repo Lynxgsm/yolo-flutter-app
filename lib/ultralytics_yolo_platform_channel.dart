@@ -174,4 +174,16 @@ class PlatformChannelUltralyticsYolo implements UltralyticsYoloPlatform {
   Future<String?> stopRecording() => methodChannel
       .invokeMethod<String>('stopRecording')
       .catchError((dynamic e) => e.toString());
+
+  @override
+  Future<Uint8List?> takePictureAsBytes() async {
+    try {
+      final result =
+          await methodChannel.invokeMethod<Uint8List>('takePictureAsBytes');
+      return result;
+    } catch (e) {
+      debugPrint('Error taking picture: $e');
+      return null;
+    }
+  }
 }

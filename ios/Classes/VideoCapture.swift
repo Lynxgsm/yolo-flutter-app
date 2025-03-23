@@ -195,6 +195,51 @@ public class VideoCapture: NSObject {
     
     return "Success"
   }
+
+  // MARK: - Photo Capture
+  
+  public func takePictureAsBytes(completion: @escaping (Data?, Error?) -> Void) {
+    guard captureSession.isRunning, let photoOutput = captureSession.outputs.first(where: { $0 is AVCapturePhotoOutput }) as? AVCapturePhotoOutput else {
+      completion(nil, NSError(domain: "VideoCapture", code: 1, userInfo: [NSLocalizedDescriptionKey: "Camera not running or photo output not available"]))
+      return
+    }
+    
+    // Configure photo settings
+    let settings = AVCapturePhotoSettings()
+    
+    // Create a delegate to handle the photo capture and return bytes
+    let photoDelegate = BytesPhotoCaptureDelegate { (imageData, error) in
+      completion(imageData, error)
+    }
+    
+    // Capture the photo
+    photoOutput.capturePhoto(with: settings, delegate: photoDelegate)
+  }
+  
+  // Helper class for photo capture that returns bytes
+  class BytesPhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDelegate {
+    private let completion: (Data?, Error?) -> Void
+    
+    init(completion: @escaping (Data?, Error?) -> Void) {
+      self.completion = completion
+      super.init()
+    }
+    
+    func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
+      if let error = error {
+        completion(nil, error)
+        return
+      }
+      
+      guard let imageData = photo.fileDataRepresentation() else {
+        completion(nil, NSError(domain: "PhotoCapture", code: 2, userInfo: [NSLocalizedDescriptionKey: "Could not get image data"]))
+        return
+      }
+      
+      // Return the image data directly
+      completion(imageData, nil)
+    }
+  }
 }
 
 extension VideoCapture: AVCaptureVideoDataOutputSampleBufferDelegate {

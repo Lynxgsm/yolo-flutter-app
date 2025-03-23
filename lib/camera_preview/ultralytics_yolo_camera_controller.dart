@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:ultralytics_yolo/ultralytics_yolo_platform_interface.dart';
+import 'dart:typed_data';
 
 /// The state of the camera
 class UltralyticsYoloCameraValue {
@@ -106,5 +107,18 @@ class UltralyticsYoloCameraController
   /// Stops the camera
   Future<void> pauseLivePrediction() async {
     await _ultralyticsYoloPlatform.pauseLivePrediction();
+  }
+
+  /// Takes a picture and returns it as bytes (Uint8List)
+  /// Returns null if the picture could not be taken
+  Future<Uint8List?> takePictureAsBytes() async {
+    try {
+      return await _ultralyticsYoloPlatform.takePictureAsBytes();
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error taking picture: $e');
+      }
+      return null;
+    }
   }
 }
