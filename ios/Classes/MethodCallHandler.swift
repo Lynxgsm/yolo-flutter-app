@@ -69,6 +69,12 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
       setLensDirection(args: args, result: result)
     case "closeCamera":
       closeCamera(args: args, result: result)
+    case "startCamera":
+      startCamera(args: args, result: result)
+    case "pauseLivePrediction":
+      pauseLivePrediction(args: args, result: result)
+    case "resumeLivePrediction":
+      resumeLivePrediction(args: args, result: result)
     case "detectImage", "classifyImage":
       predictOnImage(args: args, result: result)
     case "startRecording":
@@ -191,6 +197,24 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
   private func closeCamera(args: [String: Any], result: @escaping FlutterResult) {
     videoCapture.stop()
     result(nil)
+  }
+
+  private func startCamera(args: [String: Any], result: @escaping FlutterResult) {
+    videoCapture.start()
+    result("Success")
+  }
+  
+  private func pauseLivePrediction(args: [String: Any], result: @escaping FlutterResult) {
+    // For pausing prediction, we can temporarily disable the delegate
+    // without stopping the camera entirely
+    videoCapture.delegate = nil
+    result("Success")
+  }
+  
+  private func resumeLivePrediction(args: [String: Any], result: @escaping FlutterResult) {
+    // To resume prediction, we reattach the delegate
+    videoCapture.delegate = self
+    result("Success")
   }
 
   private func createCIImage(fromPath path: String) throws -> CIImage? {

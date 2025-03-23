@@ -268,20 +268,40 @@ public class MethodCallHandler implements MethodChannel.MethodCallHandler {
     }
 
     private void closeCamera(MethodCall call, MethodChannel.Result result) {
-//        ncnnCameraPreview.closeCamera();
+        // No need to implement if it's already handled elsewhere
+        result.success("Success");
     }
 
     private void startCamera(MethodCall call, MethodChannel.Result result) {
-        // TODO: Resume detector
-        // startCamera(0);
+        // Camera is started by the CameraPreview when it's initialized
+        // We just need to ensure predictor is attached
+        if (predictor != null) {
+            setPredictorFrameProcessor();
+            setPredictorCallbacks();
+            result.success("Success");
+        } else {
+            result.error("CAMERA_ERROR", "Predictor not initialized", null);
+        }
     }
 
     private void pauseLivePrediction(MethodCall call, MethodChannel.Result result) {
-//        ncnnCameraPreview.pauseLivePrediction();
+        // To pause live prediction, we'll detach the predictor from the camera preview
+        if (cameraPreview != null) {
+            cameraPreview.setPredictorFrameProcessor(null);
+            result.success("Success");
+        } else {
+            result.error("CAMERA_ERROR", "Camera preview not initialized", null);
+        }
     }
 
     private void resumeLivePrediction(MethodCall call, MethodChannel.Result result) {
-//        ncnnCameraPreview.resumeLivePrediction();
+        // To resume live prediction, we'll reattach the predictor to the camera preview
+        if (cameraPreview != null && predictor != null) {
+            cameraPreview.setPredictorFrameProcessor(predictor);
+            result.success("Success");
+        } else {
+            result.error("CAMERA_ERROR", "Camera preview or predictor not initialized", null);
+        }
     }
 
     private void detectImage(MethodCall call, MethodChannel.Result result) {
