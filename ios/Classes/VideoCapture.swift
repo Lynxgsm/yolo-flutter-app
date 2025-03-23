@@ -195,6 +195,50 @@ public class VideoCapture: NSObject {
     
     return "Success"
   }
+
+  // Function to take a photo and save it to disk
+  public func takePhoto(completion: @escaping (String?, Error?) -> Void) {
+    guard captureSession.isRunning else {
+      completion(nil, NSError(domain: "VideoCapture", code: 1, userInfo: [NSLocalizedDescriptionKey: "Camera is not running"]))
+      return
+    }
+    
+    let settings = AVCapturePhotoSettings()
+    
+    // Create a unique filename with timestamp
+    let dateFormatter = DateFormatter()
+    dateFormatter.dateFormat = "yyyyMMdd_HHmmss"
+    let timestamp = dateFormatter.string(from: Date())
+    let filename = "YOLO_Photo_\(timestamp).jpg"
+    
+    // Get documents directory path
+    guard let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+      completion(nil, NSError(domain: "VideoCapture", code: 2, userInfo: [NSLocalizedDescriptionKey: "Could not access documents directory"]))
+      return
+    }
+    let filePath = documentsDirectory.appendingPathComponent(filename)
+    
+    photoOutput.capturePhoto(with: settings, delegate: PhotoCaptureProcessor(
+      completionHandler: { image, error in
+        guard let image = image, error == nil else {
+          completion(nil, error ?? NSError(domain: "VideoCapture", code: 3, userInfo: [NSLocalizedDescriptionKey: "Failed to capture photo"]))
+          return
+        }
+        
+        // Save image to disk
+        if let data = image.jpegData(compressionQuality: 0.9) {
+          do {
+            try data.write(to: filePath)
+            completion(filePath.path, nil)
+          } catch {
+            completion(nil, error)
+          }
+        } else {
+          completion(nil, NSError(domain: "VideoCapture", code: 4, userInfo: [NSLocalizedDescriptionKey: "Failed to convert image to JPEG"]))
+        }
+      }
+    ))
+  }
 }
 
 extension VideoCapture: AVCaptureVideoDataOutputSampleBufferDelegate {
@@ -248,5 +292,29 @@ extension VideoCapture: AVCaptureFileOutputRecordingDelegate {
     } else {
       print("DEBUG: Video saved to photo library successfully")
     }
+  }
+}
+
+// Helper class to process photo capture
+class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelegate {
+  private let completionHandler: (UIImage?, Error?) -> Void
+  
+  init(completionHandler: @escaping (UIImage?, Error?) -> Void) {
+    self.completionHandler = completionHandler
+  }
+  
+  func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
+    if let error = error {
+      completionHandler(nil, error)
+      return
+    }
+    
+    guard let imageData = photo.fileDataRepresentation() else {
+      completionHandler(nil, NSError(domain: "PhotoCapture", code: 1, userInfo: [NSLocalizedDescriptionKey: "Could not get image data"]))
+      return
+    }
+    
+    let image = UIImage(data: imageData)
+    completionHandler(image, nil)
   }
 }

@@ -34,6 +34,9 @@ import com.ultralytics.ultralytics_yolo.predict.Predictor;
 
 import java.util.concurrent.ExecutionException;
 
+import androidx.camera.core.ImageCapture;
+import androidx.camera.core.ImageCaptureException;
+import androidx.annotation.NonNull;
 
 public class CameraPreview {
     public final static Size CAMERA_PREVIEW_SIZE = new Size(640, 480);
@@ -131,6 +134,83 @@ public class CameraPreview {
 
     public void setScaleFactor(double factor) {
         cameraControl.setZoomRatio((float)factor);
+    }
+    
+    public interface PhotoCaptureCallback {
+        void onPhotoCaptured(String filePath);
+        void onError(String errorMessage);
+    }
+    
+    public void takePhoto(PhotoCaptureCallback callback) {
+        if (cameraProvider == null) {
+            callback.onError("Camera not initialized");
+            return;
+        }
+        
+        try {
+            // Create output directory
+            File outputDir = new File(context.getCacheDir(), "photos");
+            if (!outputDir.exists()) {
+                outputDir.mkdirs();
+            }
+            
+            // Create output file with timestamp
+            String timestamp = new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new Date());
+            File outputFile = new File(outputDir, "yolo_photo_" + timestamp + ".jpg");
+            
+            // Create image capture use case
+            ImageCapture imageCapture = new ImageCapture.Builder()
+                    .setTargetRotation(((Activity) context).getWindowManager().getDefaultDisplay().getRotation())
+                    .build();
+            
+            // Unbind video capture uses cases and bind image capture
+            Camera camera = null;
+            if (cameraProvider != null) {
+                cameraProvider.unbindAll();
+                
+                CameraSelector cameraSelector = new CameraSelector.Builder()
+                        .requireLensFacing(CameraSelector.LENS_FACING_BACK)
+                        .build();
+                
+                // Rebind preview and image capture
+                Preview cameraPreview = new Preview.Builder()
+                        .setTargetAspectRatio(AspectRatio.RATIO_4_3)
+                        .build();
+                cameraPreview.setSurfaceProvider(mPreviewView.getSurfaceProvider());
+                
+                camera = cameraProvider.bindToLifecycle(
+                        (LifecycleOwner) activity, 
+                        cameraSelector, 
+                        cameraPreview, 
+                        imageCapture);
+                
+                // Capture the image
+                ImageCapture.OutputFileOptions outputOptions = new ImageCapture.OutputFileOptions.Builder(outputFile).build();
+                
+                imageCapture.takePicture(
+                    outputOptions,
+                    ContextCompat.getMainExecutor(context),
+                    new ImageCapture.OnImageSavedCallback() {
+                        @Override
+                        public void onImageSaved(@NonNull ImageCapture.OutputFileResults outputFileResults) {
+                            // Photo saved successfully, rebind original use cases
+                            callback.onPhotoCaptured(outputFile.getAbsolutePath());
+                            // Rebind original use cases
+                            bindPreview(cameraSelector.getLensFacing());
+                        }
+                        
+                        @Override
+                        public void onError(@NonNull ImageCaptureException exception) {
+                            callback.onError("Error capturing photo: " + exception.getMessage());
+                            // Rebind original use cases
+                            bindPreview(cameraSelector.getLensFacing());
+                        }
+                    }
+                );
+            }
+        } catch (Exception e) {
+            callback.onError("Error setting up photo capture: " + e.getMessage());
+        }
     }
     
     public String startRecording() {

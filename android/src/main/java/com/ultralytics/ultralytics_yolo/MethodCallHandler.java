@@ -106,6 +106,9 @@ public class MethodCallHandler implements MethodChannel.MethodCallHandler {
             case "resumeLivePrediction":
                 resumeLivePrediction(call, result);
                 break;
+            case "takePhoto":
+                takePhoto(call, result);
+                break;
             case "setZoomRatio":
                 setScaleFactor(call, result);
                 break;
@@ -302,6 +305,25 @@ public class MethodCallHandler implements MethodChannel.MethodCallHandler {
         } else {
             result.error("CAMERA_ERROR", "Camera preview or predictor not initialized", null);
         }
+    }
+
+    private void takePhoto(MethodCall call, MethodChannel.Result result) {
+        if (cameraPreview == null) {
+            result.error("CAMERA_ERROR", "Camera preview not initialized", null);
+            return;
+        }
+        
+        cameraPreview.takePhoto(new CameraPreview.PhotoCaptureCallback() {
+            @Override
+            public void onPhotoCaptured(String filePath) {
+                result.success(filePath);
+            }
+            
+            @Override
+            public void onError(String errorMessage) {
+                result.error("PHOTO_ERROR", errorMessage, null);
+            }
+        });
     }
 
     private void detectImage(MethodCall call, MethodChannel.Result result) {

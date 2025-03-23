@@ -75,6 +75,8 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
       pauseLivePrediction(args: args, result: result)
     case "resumeLivePrediction":
       resumeLivePrediction(args: args, result: result)
+    case "takePhoto":
+      takePhoto(args: args, result: result)
     case "detectImage", "classifyImage":
       predictOnImage(args: args, result: result)
     case "startRecording":
@@ -215,6 +217,21 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
     // To resume prediction, we reattach the delegate
     videoCapture.delegate = self
     result("Success")
+  }
+
+  private func takePhoto(args: [String: Any], result: @escaping FlutterResult) {
+    videoCapture.takePhoto { (filePath, error) in
+      if let error = error {
+        result(FlutterError(code: "PHOTO_ERROR", message: error.localizedDescription, details: nil))
+        return
+      }
+      
+      if let filePath = filePath {
+        result(filePath)
+      } else {
+        result(FlutterError(code: "PHOTO_ERROR", message: "Failed to capture photo", details: nil))
+      }
+    }
   }
 
   private func createCIImage(fromPath path: String) throws -> CIImage? {
