@@ -113,7 +113,26 @@ class UltralyticsYoloCameraController
   /// Returns null if the picture could not be taken
   Future<Uint8List?> takePictureAsBytes() async {
     try {
-      return await _ultralyticsYoloPlatform.takePictureAsBytes();
+      if (kDebugMode) {
+        print('Starting to take picture...');
+      }
+
+      final result = await _ultralyticsYoloPlatform.takePictureAsBytes();
+
+      if (result == null) {
+        if (kDebugMode) {
+          print('Picture taking failed - returned null');
+        }
+        return null;
+      }
+
+      if (kDebugMode) {
+        print(
+          'Picture taken successfully, size: ${result.lengthInBytes} bytes',
+        );
+      }
+
+      return result;
     } catch (e) {
       if (kDebugMode) {
         print('Error taking picture: $e');

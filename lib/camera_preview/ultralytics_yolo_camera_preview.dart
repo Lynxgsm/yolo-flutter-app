@@ -78,17 +78,43 @@ class _UltralyticsYoloCameraPreviewState
   }
 
   Future<void> _takePicture() async {
-    if (_isTakingPicture) return;
+    if (_isTakingPicture) {
+      if (kDebugMode) {
+        print('Already taking a picture, ignoring request');
+      }
+      return;
+    }
 
     setState(() {
       _isTakingPicture = true;
     });
 
+    if (kDebugMode) {
+      print('Taking picture using the controller...');
+    }
+
     try {
       // Use the new bytes method
       final imageBytes = await widget.controller.takePictureAsBytes();
-      if (imageBytes != null && widget.onPictureBytesAvailable != null) {
-        widget.onPictureBytesAvailable!(imageBytes);
+
+      if (imageBytes == null) {
+        if (kDebugMode) {
+          print('Failed to take picture - null data returned');
+        }
+      } else {
+        if (kDebugMode) {
+          print(
+            'Picture taken successfully with ${imageBytes.lengthInBytes} bytes',
+          );
+        }
+
+        if (widget.onPictureBytesAvailable != null) {
+          widget.onPictureBytesAvailable!(imageBytes);
+        } else {
+          if (kDebugMode) {
+            print('No onPictureBytesAvailable callback provided');
+          }
+        }
       }
     } catch (e) {
       // Handle error
@@ -96,6 +122,10 @@ class _UltralyticsYoloCameraPreviewState
         print('Error taking picture: $e');
       }
     } finally {
+      if (kDebugMode) {
+        print('Picture taking process completed');
+      }
+
       setState(() {
         _isTakingPicture = false;
       });
