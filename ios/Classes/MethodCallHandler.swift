@@ -220,15 +220,34 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
   }
 
   private func takePhoto(args: [String: Any], result: @escaping FlutterResult) {
+    print("DEBUG: takePhoto method called in MethodCallHandler")
+    
+    // First check if camera is running
+    if !videoCapture.captureSession.isRunning {
+      print("DEBUG: Camera is not running, starting it")
+      videoCapture.start()
+      // Give the camera a moment to start up
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        self.proceedWithPhotoCapture(result: result)
+      }
+    } else {
+      proceedWithPhotoCapture(result: result)
+    }
+  }
+  
+  private func proceedWithPhotoCapture(result: @escaping FlutterResult) {
     videoCapture.takePhoto { (filePath, error) in
       if let error = error {
+        print("DEBUG: Photo capture returned error: \(error.localizedDescription)")
         result(FlutterError(code: "PHOTO_ERROR", message: error.localizedDescription, details: nil))
         return
       }
       
       if let filePath = filePath {
+        print("DEBUG: Photo capture succeeded with path: \(filePath)")
         result(filePath)
       } else {
+        print("DEBUG: Photo capture failed without error")
         result(FlutterError(code: "PHOTO_ERROR", message: "Failed to capture photo", details: nil))
       }
     }

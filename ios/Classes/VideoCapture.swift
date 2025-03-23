@@ -101,9 +101,17 @@ public class VideoCapture: NSObject {
           print("DEBUG: Added video output")
         }
 
+        // Configure photo output with high resolution
+        self.photoOutput.isHighResolutionCaptureEnabled = true
+        if #available(iOS 13.0, *) {
+          self.photoOutput.maxPhotoQualityPrioritization = .quality
+        }
+        
         if self.captureSession.canAddOutput(self.photoOutput) {
           self.captureSession.addOutput(self.photoOutput)
           print("DEBUG: Added photo output")
+        } else {
+          print("DEBUG: Failed to add photo output to session")
         }
         
         // Add movie file output for recording
@@ -199,10 +207,12 @@ public class VideoCapture: NSObject {
   // Function to take a photo and save it to disk
   public func takePhoto(completion: @escaping (String?, Error?) -> Void) {
     guard captureSession.isRunning else {
+      print("DEBUG: takePhoto failed - camera is not running")
       completion(nil, NSError(domain: "VideoCapture", code: 1, userInfo: [NSLocalizedDescriptionKey: "Camera is not running"]))
       return
     }
     
+    print("DEBUG: Attempting to take photo")
     let settings = AVCapturePhotoSettings()
     
     // Create a unique filename with timestamp
@@ -211,33 +221,48 @@ public class VideoCapture: NSObject {
     let timestamp = dateFormatter.string(from: Date())
     let filename = "YOLO_Photo_\(timestamp).jpg"
     
-    // Get documents directory path
-    guard let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
-      completion(nil, NSError(domain: "VideoCapture", code: 2, userInfo: [NSLocalizedDescriptionKey: "Could not access documents directory"]))
-      return
-    }
-    let filePath = documentsDirectory.appendingPathComponent(filename)
+    // Get temporary directory path which is more reliably accessible
+    let tempDirectory = NSTemporaryDirectory()
+    let filePath = URL(fileURLWithPath: tempDirectory).appendingPathComponent(filename)
+    print("DEBUG: Photo will be saved to \(filePath.path)")
     
-    photoOutput.capturePhoto(with: settings, delegate: PhotoCaptureProcessor(
-      completionHandler: { image, error in
-        guard let image = image, error == nil else {
-          completion(nil, error ?? NSError(domain: "VideoCapture", code: 3, userInfo: [NSLocalizedDescriptionKey: "Failed to capture photo"]))
-          return
-        }
-        
-        // Save image to disk
-        if let data = image.jpegData(compressionQuality: 0.9) {
-          do {
-            try data.write(to: filePath)
-            completion(filePath.path, nil)
-          } catch {
-            completion(nil, error)
-          }
-        } else {
-          completion(nil, NSError(domain: "VideoCapture", code: 4, userInfo: [NSLocalizedDescriptionKey: "Failed to convert image to JPEG"]))
-        }
+    // Create a processor for this capture
+    let processor = PhotoCaptureProcessor { [weak self] image, error in
+      guard let self = self else { return }
+      
+      if let error = error {
+        print("DEBUG: Photo capture error: \(error.localizedDescription)")
+        completion(nil, error)
+        return
       }
-    ))
+      
+      guard let image = image else {
+        print("DEBUG: Photo capture returned nil image")
+        completion(nil, NSError(domain: "VideoCapture", code: 3, userInfo: [NSLocalizedDescriptionKey: "Failed to capture photo"]))
+        return
+      }
+      
+      print("DEBUG: Photo captured successfully, saving to disk")
+      
+      // Save image to disk
+      if let data = image.jpegData(compressionQuality: 0.9) {
+        do {
+          try data.write(to: filePath)
+          print("DEBUG: Photo saved to \(filePath.path)")
+          completion(filePath.path, nil)
+        } catch {
+          print("DEBUG: Failed to write photo to disk: \(error.localizedDescription)")
+          completion(nil, error)
+        }
+      } else {
+        print("DEBUG: Failed to convert image to JPEG")
+        completion(nil, NSError(domain: "VideoCapture", code: 4, userInfo: [NSLocalizedDescriptionKey: "Failed to convert image to JPEG"]))
+      }
+    }
+    
+    // Start the photo capture process
+    print("DEBUG: Calling capturePhoto on photoOutput")
+    photoOutput.capturePhoto(with: settings, delegate: processor)
   }
 }
 
@@ -247,22 +272,6 @@ extension VideoCapture: AVCaptureVideoDataOutputSampleBufferDelegate {
     from connection: AVCaptureConnection
   ) {
     delegate?.videoCapture(self, didCaptureVideoFrame: sampleBuffer)
-  }
-}
-
-extension VideoCapture: AVCapturePhotoCaptureDelegate {
-  public func photoOutput(
-    _ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?
-  ) {
-    guard let imageData = photo.fileDataRepresentation(),
-      let image = UIImage(data: imageData)
-    else {
-      print("DEBUG: Error converting photo to image")
-      return
-    }
-
-    self.lastCapturedPhoto = image
-    print("DEBUG: Photo captured successfully")
   }
 }
 
@@ -298,23 +307,34 @@ extension VideoCapture: AVCaptureFileOutputRecordingDelegate {
 // Helper class to process photo capture
 class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelegate {
   private let completionHandler: (UIImage?, Error?) -> Void
+  private var selfReference: PhotoCaptureProcessor?
   
   init(completionHandler: @escaping (UIImage?, Error?) -> Void) {
     self.completionHandler = completionHandler
+    super.init()
+    self.selfReference = self
   }
   
   func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
+    print("DEBUG: PhotoCaptureProcessor - photoOutput called")
+    
     if let error = error {
+      print("DEBUG: PhotoCaptureProcessor - Error: \(error.localizedDescription)")
       completionHandler(nil, error)
+      selfReference = nil
       return
     }
     
     guard let imageData = photo.fileDataRepresentation() else {
+      print("DEBUG: PhotoCaptureProcessor - Could not get image data")
       completionHandler(nil, NSError(domain: "PhotoCapture", code: 1, userInfo: [NSLocalizedDescriptionKey: "Could not get image data"]))
+      selfReference = nil
       return
     }
     
+    print("DEBUG: PhotoCaptureProcessor - Image data retrieved, size: \(imageData.count) bytes")
     let image = UIImage(data: imageData)
     completionHandler(image, nil)
+    selfReference = nil
   }
 }
