@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -19,6 +20,9 @@ class UltralyticsYoloCameraPreview extends StatefulWidget {
     this.boundingBoxesColorList = const [Colors.lightBlueAccent],
     this.classificationOverlay,
     this.loadingPlaceholder,
+    this.showCaptureButton = false,
+    this.onPictureTaken,
+    this.onPictureBytesAvailable,
     super.key,
   });
 
@@ -40,6 +44,16 @@ class UltralyticsYoloCameraPreview extends StatefulWidget {
   /// The placeholder widget displayed while the predictor is loading.
   final Widget? loadingPlaceholder;
 
+  /// Whether to show the capture button.
+  final bool showCaptureButton;
+
+  /// Callback when a picture is taken. Provides the path to the saved image.
+  /// This is maintained for backward compatibility.
+  final Function(String imagePath)? onPictureTaken;
+
+  /// Callback when picture bytes are available. Provides the image as Uint8List.
+  final Function(Uint8List imageBytes)? onPictureBytesAvailable;
+
   @override
   State<UltralyticsYoloCameraPreview> createState() =>
       _UltralyticsYoloCameraPreviewState();
@@ -57,8 +71,65 @@ class _UltralyticsYoloCameraPreviewState
 
   final double _maxZoomLevel = 5;
 
+  bool _isTakingPicture = false;
+
   void _onPlatformViewCreated(_) {
     widget.onCameraCreated();
+  }
+
+  Future<void> _takePicture() async {
+    if (_isTakingPicture) {
+      if (kDebugMode) {
+        print('Already taking a picture, ignoring request');
+      }
+      return;
+    }
+
+    setState(() {
+      _isTakingPicture = true;
+    });
+
+    if (kDebugMode) {
+      print('Taking picture using the controller...');
+    }
+
+    try {
+      // Use the new bytes method
+      final imageBytes = await widget.controller.takePictureAsBytes();
+
+      if (imageBytes == null) {
+        if (kDebugMode) {
+          print('Failed to take picture - null data returned');
+        }
+      } else {
+        if (kDebugMode) {
+          print(
+            'Picture taken successfully with ${imageBytes.lengthInBytes} bytes',
+          );
+        }
+
+        if (widget.onPictureBytesAvailable != null) {
+          widget.onPictureBytesAvailable!(imageBytes);
+        } else {
+          if (kDebugMode) {
+            print('No onPictureBytesAvailable callback provided');
+          }
+        }
+      }
+    } catch (e) {
+      // Handle error
+      if (kDebugMode) {
+        print('Error taking picture: $e');
+      }
+    } finally {
+      if (kDebugMode) {
+        print('Picture taking process completed');
+      }
+
+      setState(() {
+        _isTakingPicture = false;
+      });
+    }
   }
 
   @override
@@ -184,6 +255,47 @@ class _UltralyticsYoloCameraPreviewState
                 child: const Center(child: Text('')),
               ),
             ),
+
+            // Camera capture button
+            if (widget.showCaptureButton)
+              Positioned(
+                bottom: 30,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: GestureDetector(
+                    onTap: _takePicture,
+                    child: Container(
+                      width: 70,
+                      height: 70,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.8),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Colors.white,
+                          width: 3,
+                        ),
+                      ),
+                      child: _isTakingPicture
+                          ? const Center(
+                              child: SizedBox(
+                                width: 30,
+                                height: 30,
+                                child: CircularProgressIndicator(
+                                  color: Colors.black,
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            )
+                          : const Icon(
+                              Icons.camera_alt,
+                              color: Colors.black,
+                              size: 32,
+                            ),
+                    ),
+                  ),
+                ),
+              ),
           ],
         );
       },

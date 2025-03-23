@@ -2,19 +2,23 @@ package com.ultralytics.ultralytics_yolo;
 
 import android.app.Activity;
 import android.content.Context;
+import android.graphics.ImageFormat;
+import android.graphics.Rect;
+import android.graphics.YuvImage;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Message;
 import android.util.Size;
-import java.io.File;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.Locale;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
+import android.view.Surface;
+import android.view.WindowManager;
+import androidx.annotation.NonNull;
 import androidx.camera.core.AspectRatio;
 import androidx.camera.core.Camera;
 import androidx.camera.core.CameraControl;
 import androidx.camera.core.CameraSelector;
 import androidx.camera.core.ImageAnalysis;
+import androidx.camera.core.ImageCapture;
+import androidx.camera.core.ImageProxy;
 import androidx.camera.core.Preview;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.video.FileOutputOptions;
@@ -32,8 +36,17 @@ import androidx.lifecycle.LifecycleOwner;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.ultralytics.ultralytics_yolo.predict.Predictor;
 
-import java.util.concurrent.ExecutionException;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
+import android.media.Image;
 
 public class CameraPreview {
     public final static Size CAMERA_PREVIEW_SIZE = new Size(640, 480);
@@ -133,6 +146,106 @@ public class CameraPreview {
         cameraControl.setZoomRatio((float)factor);
     }
     
+    // Interface for receiving the captured image data
+    public interface PictureCallback {
+        void onPictureTaken(byte[] imageBytes);
+        void onError(String errorMessage);
+    }
+    
+    public void takePictureAsBytes(PictureCallback callback) {
+        if (cameraProvider == null || activity == null) {
+            callback.onError("Camera not initialized");
+            return;
+        }
+
+        try {
+            // Set up image capture
+            androidx.camera.core.ImageCapture imageCapture = new androidx.camera.core.ImageCapture.Builder()
+                    .setTargetRotation(activity.getWindowManager().getDefaultDisplay().getRotation())
+                    .build();
+
+            // Temporarily unbind and rebind with image capture
+            cameraProvider.unbindAll();
+            
+            CameraSelector cameraSelector = new CameraSelector.Builder()
+                    .requireLensFacing(mPreviewView.getDisplay().getDisplayId())
+                    .build();
+                    
+            // Rebind with image capture
+            Preview cameraPreview = new Preview.Builder()
+                    .setTargetAspectRatio(AspectRatio.RATIO_4_3)
+                    .build();
+                    
+            cameraPreview.setSurfaceProvider(mPreviewView.getSurfaceProvider());
+                    
+            cameraProvider.bindToLifecycle(
+                    (LifecycleOwner) activity, 
+                    cameraSelector, 
+                    cameraPreview,
+                    imageCapture);
+
+            // Take the picture to memory
+            imageCapture.takePicture(
+                    ContextCompat.getMainExecutor(context),
+                    new androidx.camera.core.ImageCapture.OnImageCapturedCallback() {
+                        @Override
+                        public void onCaptureSuccess(@NonNull androidx.camera.core.ImageProxy image) {
+                            // Convert to bytes
+                            byte[] bytes = imageToByteArray(image);
+                            image.close(); // Close the image after extraction
+                            
+                            // Restore camera setup
+                            cameraProvider.unbindAll();
+                            bindPreview(mPreviewView.getDisplay().getDisplayId());
+                            
+                            // Return the bytes
+                            callback.onPictureTaken(bytes);
+                        }
+
+                        @Override
+                        public void onError(@NonNull androidx.camera.core.ImageCaptureException exception) {
+                            // Restore camera setup on error
+                            cameraProvider.unbindAll();
+                            bindPreview(mPreviewView.getDisplay().getDisplayId());
+                            
+                            callback.onError(exception.getMessage());
+                        }
+                    });
+        } catch (Exception e) {
+            e.printStackTrace();
+            callback.onError(e.getMessage());
+        }
+    }
+    
+    private byte[] imageToByteArray(androidx.camera.core.ImageProxy image) {
+        androidx.camera.core.ImageProxy.PlaneProxy[] planes = image.getPlanes();
+        androidx.camera.core.ImageProxy.PlaneProxy yPlane = planes[0];
+        androidx.camera.core.ImageProxy.PlaneProxy uPlane = planes[1];
+        androidx.camera.core.ImageProxy.PlaneProxy vPlane = planes[2];
+
+        ByteBuffer yBuffer = yPlane.getBuffer();
+        ByteBuffer uBuffer = uPlane.getBuffer();
+        ByteBuffer vBuffer = vPlane.getBuffer();
+
+        int ySize = yBuffer.remaining();
+        int uSize = uBuffer.remaining();
+        int vSize = vBuffer.remaining();
+
+        byte[] nv21 = new byte[ySize + uSize + vSize];
+
+        // U and V are swapped
+        yBuffer.get(nv21, 0, ySize);
+        vBuffer.get(nv21, ySize, vSize);
+        uBuffer.get(nv21, ySize + vSize, uSize);
+
+        // Convert NV21 to JPEG
+        YuvImage yuvImage = new YuvImage(nv21, ImageFormat.NV21, image.getWidth(), image.getHeight(), null);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        yuvImage.compressToJpeg(new Rect(0, 0, image.getWidth(), image.getHeight()), 100, out);
+
+        return out.toByteArray();
+    }
+
     public String startRecording() {
         if (videoCapture == null) {
             return "Error: Camera not initialized";

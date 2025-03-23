@@ -81,6 +81,8 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
       startRecording(args: args, result: result)
     case "stopRecording":
       stopRecording(args: args, result: result)
+    case "takePictureAsBytes":
+      takePictureAsBytes(args: args, result: result)
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -251,7 +253,23 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
     if response.starts(with: "Error") {
       result(FlutterError(code: "RECORDING_ERROR", message: response, details: nil))
     } else {
-      result("Success")
+      result(response)
+    }
+  }
+
+  private func takePictureAsBytes(args: [String: Any], result: @escaping FlutterResult) {
+    videoCapture.takePictureAsBytes { (imageData, error) in
+      if let error = error {
+        result(FlutterError(code: "PICTURE_ERROR", 
+                           message: error.localizedDescription, 
+                           details: nil))
+      } else if let imageData = imageData {
+        result(FlutterStandardTypedData(bytes: imageData))
+      } else {
+        result(FlutterError(code: "PICTURE_ERROR", 
+                           message: "Unknown error occurred while taking picture", 
+                           details: nil))
+      }
     }
   }
 
