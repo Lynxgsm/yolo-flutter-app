@@ -195,6 +195,63 @@ public class VideoCapture: NSObject {
     
     return "Success"
   }
+  
+  // MARK: - Photo Capture
+  
+  public func takePhoto(completion: @escaping (Data?) -> Void) {
+    if !captureSession.isRunning {
+      print("DEBUG: Cannot take photo - camera not running")
+      completion(nil)
+      return
+    }
+    
+    print("DEBUG: Taking photo")
+    
+    let settings = AVCapturePhotoSettings()
+    settings.flashMode = .auto
+    
+    // Use a semaphore to wait for the photo capture to complete
+    let semaphore = DispatchSemaphore(value: 0)
+    var photoData: Data? = nil
+    
+    // Capture the photo
+    photoOutput.capturePhoto(with: settings, delegate: PhotoCaptureProcessor { data in
+      photoData = data
+      semaphore.signal()
+    })
+    
+    // Wait for the photo capture to complete with a timeout
+    DispatchQueue.global().async {
+      let _ = semaphore.wait(timeout: .now() + 5.0) // 5 second timeout
+      completion(photoData)
+    }
+  }
+}
+
+// Helper class for photo capture processing
+class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelegate {
+  private let completion: (Data?) -> Void
+  
+  init(completion: @escaping (Data?) -> Void) {
+    self.completion = completion
+    super.init()
+  }
+  
+  func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
+    if let error = error {
+      print("DEBUG: Error capturing photo: \(error.localizedDescription)")
+      completion(nil)
+      return
+    }
+    
+    guard let imageData = photo.fileDataRepresentation() else {
+      print("DEBUG: Could not get image data")
+      completion(nil)
+      return
+    }
+    
+    completion(imageData)
+  }
 }
 
 extension VideoCapture: AVCaptureVideoDataOutputSampleBufferDelegate {

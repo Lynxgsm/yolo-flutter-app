@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:ultralytics_yolo/predict/classify/classification_result.dart';
 import 'package:ultralytics_yolo/predict/detect/detected_object.dart';
+import 'dart:typed_data';
 
 import 'package:ultralytics_yolo/ultralytics_yolo_platform_interface.dart';
 
@@ -174,4 +175,12 @@ class PlatformChannelUltralyticsYolo implements UltralyticsYoloPlatform {
   Future<String?> stopRecording() => methodChannel
       .invokeMethod<String>('stopRecording')
       .catchError((dynamic e) => e.toString());
+
+  @override
+  Future<Uint8List?> takePhoto() => methodChannel
+          .invokeMethod<Uint8List>('takePhoto')
+          .catchError((dynamic e) {
+        debugPrint(e.toString());
+        return null;
+      });
 }

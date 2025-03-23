@@ -2,6 +2,7 @@ import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:ultralytics_yolo/predict/classify/classification_result.dart';
 import 'package:ultralytics_yolo/predict/detect/detected_object.dart';
 import 'package:ultralytics_yolo/ultralytics_yolo_platform_channel.dart';
+import 'dart:typed_data';
 
 /// The interface that implementations of ultralytics_yolo must implement.
 abstract class UltralyticsYoloPlatform extends PlatformInterface {
@@ -60,6 +61,11 @@ abstract class UltralyticsYoloPlatform extends PlatformInterface {
   /// Close the camera.
   Future<String?> closeCamera() {
     throw UnimplementedError('closeCamera has not been implemented.');
+  }
+
+  /// Take a photo and return it as bytes.
+  Future<Uint8List?> takePhoto() {
+    throw UnimplementedError('takePhoto has not been implemented.');
   }
 
   /// Start the camera.

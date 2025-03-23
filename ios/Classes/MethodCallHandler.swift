@@ -81,6 +81,8 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
       startRecording(args: args, result: result)
     case "stopRecording":
       stopRecording(args: args, result: result)
+    case "takePhoto":
+      takePhoto(args: args, result: result)
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -252,6 +254,18 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
       result(FlutterError(code: "RECORDING_ERROR", message: response, details: nil))
     } else {
       result("Success")
+    }
+  }
+
+  private func takePhoto(args: [String: Any], result: @escaping FlutterResult) {
+    videoCapture.takePhoto { imageData in
+      DispatchQueue.main.async {
+        if let data = imageData {
+          result(FlutterStandardTypedData(bytes: data))
+        } else {
+          result(FlutterError(code: "PHOTO_ERROR", message: "Failed to capture photo", details: nil))
+        }
+      }
     }
   }
 

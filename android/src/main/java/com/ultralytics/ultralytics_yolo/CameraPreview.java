@@ -198,4 +198,79 @@ public class CameraPreview {
         
         cameraExecutor.shutdown();
     }
+    
+    public byte[] takePhoto() {
+        if (cameraProvider == null || mPreviewView == null) {
+            return null;
+        }
+        
+        final byte[][] imageBytes = {null};
+        final Object lock = new Object();
+        
+        try {
+            androidx.camera.core.ImageCapture imageCapture = new androidx.camera.core.ImageCapture.Builder()
+                    .setTargetAspectRatio(AspectRatio.RATIO_4_3)
+                    .build();
+                    
+            // Unbind use cases before rebinding
+            cameraProvider.unbindAll();
+            
+            // Rebind with image capture
+            CameraSelector cameraSelector = new CameraSelector.Builder()
+                    .requireLensFacing(CameraSelector.LENS_FACING_BACK)
+                    .build();
+                    
+            cameraProvider.bindToLifecycle(
+                    (LifecycleOwner) activity,
+                    cameraSelector,
+                    imageCapture);
+                    
+            // Capture the image
+            imageCapture.takePicture(
+                    ContextCompat.getMainExecutor(context),
+                    new androidx.camera.core.ImageCapture.OnImageCapturedCallback() {
+                        @Override
+                        public void onCaptureSuccess(androidx.camera.core.ImageProxy image) {
+                            // Convert image to bytes
+                            imageBytes[0] = ImageUtils.imageToJpegByteArray(image);
+                            image.close();
+                            
+                            // Restore preview and other use cases
+                            cameraProvider.unbindAll();
+                            bindPreview(CameraSelector.LENS_FACING_BACK);
+                            
+                            synchronized (lock) {
+                                lock.notify();
+                            }
+                        }
+                        
+                        @Override
+                        public void onError(Exception exception) {
+                            exception.printStackTrace();
+                            
+                            // Restore preview and other use cases
+                            cameraProvider.unbindAll();
+                            bindPreview(CameraSelector.LENS_FACING_BACK);
+                            
+                            synchronized (lock) {
+                                lock.notify();
+                            }
+                        }
+                    });
+                    
+            // Wait for the image capture to complete
+            synchronized (lock) {
+                try {
+                    lock.wait(5000); // Wait up to 5 seconds
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+            
+            return imageBytes[0];
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
 }

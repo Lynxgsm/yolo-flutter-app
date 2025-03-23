@@ -115,6 +115,9 @@ public class MethodCallHandler implements MethodChannel.MethodCallHandler {
             case "stopRecording":
                 stopRecording(call, result);
                 break;
+            case "takePhoto":
+                takePhoto(call, result);
+                break;
             default:
                 result.notImplemented();
                 break;
@@ -388,15 +391,24 @@ public class MethodCallHandler implements MethodChannel.MethodCallHandler {
     }
 
     private void stopRecording(MethodCall call, MethodChannel.Result result) {
+        String response = cameraPreview.stopRecording();
+        if (response.startsWith("Error")) {
+            result.error("RECORDING_ERROR", response, null);
+        } else {
+            result.success("Success");
+        }
+    }
+
+    private void takePhoto(MethodCall call, MethodChannel.Result result) {
         try {
-            String response = cameraPreview.stopRecording();
-            if (response.startsWith("Error")) {
-                result.error("RECORDING_ERROR", response, null);
+            byte[] imageBytes = cameraPreview.takePhoto();
+            if (imageBytes != null) {
+                result.success(imageBytes);
             } else {
-                result.success("Success");
+                result.error("PHOTO_ERROR", "Failed to capture photo", null);
             }
         } catch (Exception e) {
-            result.error("RECORDING_ERROR", "Failed to stop recording: " + e.getMessage(), null);
+            result.error("PHOTO_ERROR", "Failed to capture photo: " + e.getMessage(), null);
         }
     }
 }
