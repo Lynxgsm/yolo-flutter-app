@@ -210,21 +210,16 @@ public class VideoCapture: NSObject {
     let settings = AVCapturePhotoSettings()
     settings.flashMode = .auto
     
-    // Use a semaphore to wait for the photo capture to complete
-    let semaphore = DispatchSemaphore(value: 0)
-    var photoData: Data? = nil
-    
-    // Capture the photo
-    photoOutput.capturePhoto(with: settings, delegate: PhotoCaptureProcessor { data in
-      photoData = data
-      semaphore.signal()
-    })
-    
-    // Wait for the photo capture to complete with a timeout
-    DispatchQueue.global().async {
-      let _ = semaphore.wait(timeout: .now() + 5.0) // 5 second timeout
-      completion(photoData)
+    // Create a strong reference to the delegate that will persist until the capture completes
+    let photoCaptureProcessor = PhotoCaptureProcessor { data in
+      print("DEBUG: Photo capture completed, data: \(data != nil)")
+      DispatchQueue.main.async {
+        completion(data)
+      }
     }
+    
+    // Hold a reference to prevent deallocation before completion
+    self.photoOutput.capturePhoto(with: settings, delegate: photoCaptureProcessor)
   }
 }
 
@@ -250,6 +245,7 @@ class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelegate {
       return
     }
     
+    print("DEBUG: Successfully processed photo, data size: \(imageData.count)")
     completion(imageData)
   }
 }
