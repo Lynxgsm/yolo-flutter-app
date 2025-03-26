@@ -197,49 +197,23 @@ public class VideoCapture: NSObject {
   }
 
   func captureCurrentFrame(completion: @escaping (String?) -> Void) {
-    // Create a photo settings object
-    let settings = AVCapturePhotoSettings()
+    guard let previewLayer = self.previewLayer else {
+      completion(nil)
+      return
+    }
     
-    // Create and retain the delegate
-    let delegate = CapturePhotoDelegate(completion: { [weak self] image in
-      guard let self = self, let image = image else {
+    // Directly capture what's shown in the preview layer
+    UIGraphicsBeginImageContextWithOptions(previewLayer.bounds.size, false, UIScreen.main.scale)
+    
+    if let context = UIGraphicsGetCurrentContext() {
+      previewLayer.render(in: context)
+      let previewImage = UIGraphicsGetImageFromCurrentImageContext()
+      UIGraphicsEndImageContext()
+      
+      guard let capturedImage = previewImage else {
+        print("Failed to capture preview layer")
         completion(nil)
         return
-      }
-      
-      // Resize image to match preview layer dimensions
-      var resizedImage = image
-      if let previewLayer = self.previewLayer {
-        let previewSize = previewLayer.bounds.size
-        
-        // Create a graphics context with the target size
-        UIGraphicsBeginImageContextWithOptions(previewSize, false, 0.0)
-        
-        // Calculate the scaled size that preserves the aspect ratio
-        let aspectRatio = image.size.width / image.size.height
-        let scaledHeight = previewSize.width / aspectRatio
-        let scaledWidth = previewSize.height * aspectRatio
-        
-        let renderSize: CGSize
-        if scaledHeight > previewSize.height {
-          // Width is the constraining dimension
-          renderSize = CGSize(width: previewSize.width, height: scaledHeight)
-        } else {
-          // Height is the constraining dimension
-          renderSize = CGSize(width: scaledWidth, height: previewSize.height)
-        }
-        
-        // Calculate the center offset
-        let xOffset = (previewSize.width - renderSize.width) / 2
-        let yOffset = (previewSize.height - renderSize.height) / 2
-        
-        // Draw the image in the center
-        image.draw(in: CGRect(x: xOffset, y: yOffset, width: renderSize.width, height: renderSize.height))
-        
-        if let resized = UIGraphicsGetImageFromCurrentImageContext() {
-          resizedImage = resized
-        }
-        UIGraphicsEndImageContext()
       }
       
       // Create a temporary file path
@@ -247,7 +221,7 @@ public class VideoCapture: NSObject {
       let filePath = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
       
       // Convert the image to JPEG data
-      guard let imageData = resizedImage.jpegData(compressionQuality: 1.0) else {
+      guard let imageData = capturedImage.jpegData(compressionQuality: 1.0) else {
         completion(nil)
         return
       }
@@ -261,16 +235,10 @@ public class VideoCapture: NSObject {
         print("Failed to save captured frame: \(error)")
         completion(nil)
       }
-      
-      // Release the delegate after completion
-      self.currentCaptureDelegate = nil
-    })
-    
-    // Store the delegate to keep it alive during the capture process
-    self.currentCaptureDelegate = delegate
-    
-    // Start the photo capture
-    photoOutput.capturePhoto(with: settings, delegate: delegate)
+    } else {
+      print("Failed to get graphics context")
+      completion(nil)
+    }
   }
 
   func shutdown() {
