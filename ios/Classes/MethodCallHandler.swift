@@ -3,6 +3,7 @@
 //  ultralytics_yolo
 //
 //  Created by Sergio Sánchez on 9/11/23.
+//  Updated by Lynxgsm on 26/03/25.
 //
 
 import AVFoundation
@@ -85,6 +86,8 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
       saveVideo(args: args, result: result)
     case "stopSavingVideo":
       stopSavingVideo(args: args, result: result)
+    case "takePictureAsBytes":
+      takePictureAsBytes(args: args, result: result)
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -294,6 +297,22 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
         }
       } else {
         result(response)
+      }
+    }
+  }
+
+  private func takePictureAsBytes(args: [String: Any], result: @escaping FlutterResult) {
+    videoCapture.takePictureAsBytes { (imageData, error) in
+      if let error = error {
+        result(FlutterError(code: "PICTURE_ERROR", 
+                           message: error.localizedDescription, 
+                           details: nil))
+      } else if let imageData = imageData {
+        result(FlutterStandardTypedData(bytes: imageData))
+      } else {
+        result(FlutterError(code: "PICTURE_ERROR", 
+                           message: "Unknown error occurred while taking picture", 
+                           details: nil))
       }
     }
   }

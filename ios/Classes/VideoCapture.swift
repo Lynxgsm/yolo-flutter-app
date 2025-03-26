@@ -36,6 +36,9 @@ public class VideoCapture: NSObject {
   let cameraQueue = DispatchQueue(label: "camera-queue")
   public var lastCapturedPhoto: UIImage?
   public weak var nativeView: FLNativeView?
+  // For picture capture
+  private var bytesPhotoCaptureDelegate: BytesPhotoCaptureDelegate?
+  // For video capture
   private var isRecording = false
   private var isCapturingFrames = false
   private var videoWriter: AVAssetWriter?
