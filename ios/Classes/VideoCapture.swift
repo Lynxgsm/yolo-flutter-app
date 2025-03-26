@@ -36,6 +36,15 @@ public class VideoCapture: NSObject {
   public var lastCapturedPhoto: UIImage?
   public weak var nativeView: FLNativeView?
   private var isRecording = false
+  private var isCapturingFrames = false
+  private var videoWriter: AVAssetWriter?
+  private var videoWriterInput: AVAssetWriterInput?
+  private var pixelBufferAdaptor: AVAssetWriterInputPixelBufferAdaptor?
+  private var frameCount = 0
+  private var startTime: CMTime?
+  private var targetFramesPerSecond = 30.0
+  private var lastFrameTime = CMTime.zero
+  private var savedVideoPath: URL?
 
   public override init() {
     super.init()
@@ -195,6 +204,194 @@ public class VideoCapture: NSObject {
     
     return "Success"
   }
+
+  // MARK: - Video Frame Capture Methods
+  
+  public func saveVideo(toPath customPath: String?, completion: @escaping (String) -> Void) {
+    if isCapturingFrames {
+      completion("Error: Already capturing frames")
+      return
+    }
+    
+    if !captureSession.isRunning {
+      completion("Error: Camera not running")
+      return
+    }
+    
+    // Create a unique file path if not provided
+    let videoPath: URL
+    if let path = customPath {
+      videoPath = URL(fileURLWithPath: path)
+    } else {
+      let dateFormatter = DateFormatter()
+      dateFormatter.dateFormat = "yyyyMMdd-HHmmss"
+      let timestamp = dateFormatter.string(from: Date())
+      let tempDirectory = NSTemporaryDirectory()
+      videoPath = URL(fileURLWithPath: tempDirectory).appendingPathComponent("yolo_video_\(timestamp).mp4")
+    }
+    
+    savedVideoPath = videoPath
+    
+    // Set up AVAssetWriter
+    do {
+      // Make sure any old file is removed
+      if FileManager.default.fileExists(atPath: videoPath.path) {
+        try FileManager.default.removeItem(at: videoPath)
+      }
+      
+      videoWriter = try AVAssetWriter(outputURL: videoPath, fileType: .mp4)
+      
+      // Get the camera resolution
+      guard let connection = videoOutput.connection(with: .video) else {
+        completion("Error: Could not get video connection")
+        return
+      }
+      
+      guard let input = captureSession.inputs.first as? AVCaptureDeviceInput else {
+        completion("Error: Could not get camera input")
+        return
+      }
+      
+      let device = input.device
+      guard let format = device.activeFormat.formatDescription else {
+        completion("Error: Could not get format description")
+        return
+      }
+      
+      let dimensions = CMVideoFormatDescriptionGetDimensions(format)
+      let width = Int(dimensions.width)
+      let height = Int(dimensions.height)
+      
+      // Set up video settings
+      let videoSettings: [String: Any] = [
+        AVVideoCodecKey: AVVideoCodecType.h264,
+        AVVideoWidthKey: width,
+        AVVideoHeightKey: height,
+      ]
+      
+      videoWriterInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
+      videoWriterInput?.expectsMediaDataInRealTime = true
+      
+      if videoWriter?.canAdd(videoWriterInput!) == true {
+        videoWriter?.add(videoWriterInput!)
+      } else {
+        completion("Error: Cannot add video writer input")
+        return
+      }
+      
+      // Set up pixel buffer adaptor
+      let sourcePixelBufferAttributes: [String: Any] = [
+        kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+        kCVPixelBufferWidthKey as String: width,
+        kCVPixelBufferHeightKey as String: height,
+      ]
+      
+      pixelBufferAdaptor = AVAssetWriterInputPixelBufferAdaptor(
+        assetWriterInput: videoWriterInput!,
+        sourcePixelBufferAttributes: sourcePixelBufferAttributes
+      )
+      
+      // Start writing
+      videoWriter?.startWriting()
+      videoWriter?.startSession(atSourceTime: CMTime.zero)
+      
+      isCapturingFrames = true
+      frameCount = 0
+      startTime = nil
+      lastFrameTime = CMTime.zero
+      
+      print("DEBUG: Started capturing frames to \(videoPath.path)")
+      completion("Success: \(videoPath.path)")
+    } catch {
+      print("DEBUG: Error setting up video writer: \(error.localizedDescription)")
+      completion("Error: \(error.localizedDescription)")
+    }
+  }
+  
+  public func stopSavingVideo(completion: @escaping (String) -> Void) {
+    if !isCapturingFrames {
+      completion("Error: Not capturing frames")
+      return
+    }
+    
+    isCapturingFrames = false
+    
+    // Finalize writing
+    videoWriterInput?.markAsFinished()
+    
+    videoWriter?.finishWriting { [weak self] in
+      guard let self = self else { return }
+      
+      if let error = self.videoWriter?.error {
+        print("DEBUG: Error finishing video writing: \(error.localizedDescription)")
+        completion("Error: \(error.localizedDescription)")
+        return
+      }
+      
+      if let savedPath = self.savedVideoPath?.path {
+        print("DEBUG: Successfully saved video to \(savedPath)")
+        completion("Success: \(savedPath)")
+      } else {
+        completion("Success: Video saved")
+      }
+      
+      // Clean up
+      self.videoWriter = nil
+      self.videoWriterInput = nil
+      self.pixelBufferAdaptor = nil
+      self.savedVideoPath = nil
+    }
+  }
+  
+  // This method will be called from the captureOutput delegate method
+  private func appendVideoSampleBuffer(_ sampleBuffer: CMSampleBuffer) {
+    if !isCapturingFrames || videoWriter?.status != .writing || videoWriterInput?.isReadyForMoreMediaData != true {
+      return
+    }
+    
+    // Get the pixel buffer
+    guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
+      print("DEBUG: Could not get pixel buffer from sample buffer")
+      return
+    }
+    
+    // Get the presentation time
+    let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+    
+    if startTime == nil {
+      startTime = timestamp
+    }
+    
+    // Calculate the time relative to the start time
+    let frameTime: CMTime
+    if let start = startTime {
+      frameTime = CMTimeSubtract(timestamp, start)
+    } else {
+      frameTime = timestamp
+    }
+    
+    // Ensure we maintain our target frame rate
+    if frameCount > 0 {
+      let frameDuration = CMTimeSubtract(frameTime, lastFrameTime)
+      let frameSeconds = CMTimeGetSeconds(frameDuration)
+      
+      // Skip this frame if it's too close to the previous one
+      if frameSeconds < (1.0 / targetFramesPerSecond) {
+        return
+      }
+    }
+    
+    // Append the pixel buffer to the video
+    if pixelBufferAdaptor?.append(pixelBuffer, withPresentationTime: frameTime) == true {
+      lastFrameTime = frameTime
+      frameCount += 1
+    } else {
+      print("DEBUG: Failed to append pixel buffer at time \(frameTime)")
+      if let error = videoWriter?.error {
+        print("DEBUG: Writer error: \(error)")
+      }
+    }
+  }
 }
 
 extension VideoCapture: AVCaptureVideoDataOutputSampleBufferDelegate {
@@ -202,6 +399,12 @@ extension VideoCapture: AVCaptureVideoDataOutputSampleBufferDelegate {
     _ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer,
     from connection: AVCaptureConnection
   ) {
+    // If we're capturing frames for video, process the sample buffer
+    if isCapturingFrames {
+      appendVideoSampleBuffer(sampleBuffer)
+    }
+    
+    // Forward to delegate for normal processing
     delegate?.videoCapture(self, didCaptureVideoFrame: sampleBuffer)
   }
 }
