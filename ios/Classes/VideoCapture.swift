@@ -36,6 +36,8 @@ public class VideoCapture: NSObject {
   public var lastCapturedPhoto: UIImage?
   public weak var nativeView: FLNativeView?
   private var isRecording = false
+  // Storage property to retain the photo capture delegate
+  private var currentCaptureDelegate: CapturePhotoDelegate?
 
   public override init() {
     super.init()
@@ -198,8 +200,8 @@ public class VideoCapture: NSObject {
     // Create a photo settings object
     let settings = AVCapturePhotoSettings()
     
-    // Create a handler for the photo capture
-    photoOutput.capturePhoto(with: settings, delegate: CapturePhotoDelegate(completion: { image in
+    // Create and retain the delegate
+    let delegate = CapturePhotoDelegate(completion: { [weak self] image in
       guard let image = image else {
         completion(nil)
         return
@@ -218,12 +220,22 @@ public class VideoCapture: NSObject {
       do {
         // Write the image data to the file
         try imageData.write(to: filePath)
+        print("Frame captured and saved to: \(filePath.path)")
         completion(filePath.path)
       } catch {
         print("Failed to save captured frame: \(error)")
         completion(nil)
       }
-    }))
+      
+      // Release the delegate after completion
+      self?.currentCaptureDelegate = nil
+    })
+    
+    // Store the delegate to keep it alive during the capture process
+    self.currentCaptureDelegate = delegate
+    
+    // Start the photo capture
+    photoOutput.capturePhoto(with: settings, delegate: delegate)
   }
 
   func shutdown() {

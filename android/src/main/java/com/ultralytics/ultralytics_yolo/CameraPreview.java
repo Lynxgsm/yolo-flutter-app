@@ -12,6 +12,7 @@ import java.util.Date;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import com.ultralytics.ultralytics_yolo.ImageUtils;
 
 import androidx.camera.core.AspectRatio;
 import androidx.camera.core.Camera;
@@ -50,6 +51,7 @@ public class CameraPreview {
     private VideoCapture<Recorder> videoCapture;
     private Recording currentRecording;
     private ExecutorService cameraExecutor;
+    private volatile Bitmap latestFrame;
 
     public CameraPreview(Context context) {
         this.context = context;
@@ -90,6 +92,8 @@ public class CameraPreview {
                             .setTargetAspectRatio(AspectRatio.RATIO_4_3)
                             .build();
             imageAnalysis.setAnalyzer(Runnable::run, imageProxy -> {
+                updateLatestFrame(imageProxy);
+                
                 predictor.predict(imageProxy, facing == CameraSelector.LENS_FACING_FRONT);
 
                 //clear stream for next image
@@ -200,20 +204,15 @@ public class CameraPreview {
     }
 
     public String captureCurrentFrame() {
-        if (imageAnalyzer == null || imageAnalyzer.getCurrentFrame() == null) {
+        if (latestFrame == null) {
             throw new IllegalStateException("Camera preview not initialized or no frame available");
-        }
-
-        Bitmap currentFrame = imageAnalyzer.getCurrentFrame();
-        if (currentFrame == null) {
-            throw new IllegalStateException("Failed to get current frame");
         }
 
         // Create a file to save the image
         File imageFile = new File(context.getCacheDir(), "capture_" + System.currentTimeMillis() + ".jpg");
         try {
             FileOutputStream out = new FileOutputStream(imageFile);
-            currentFrame.compress(Bitmap.CompressFormat.JPEG, 100, out);
+            latestFrame.compress(Bitmap.CompressFormat.JPEG, 100, out);
             out.flush();
             out.close();
             return imageFile.getAbsolutePath();
@@ -229,5 +228,16 @@ public class CameraPreview {
         }
         
         cameraExecutor.shutdown();
+    }
+
+    private void updateLatestFrame(ImageAnalysis.ImageProxy imageProxy) {
+        try {
+            if (imageProxy != null) {
+                Bitmap bitmap = ImageUtils.toBitmap(imageProxy);
+                latestFrame = bitmap;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 }
