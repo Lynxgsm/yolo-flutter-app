@@ -169,24 +169,7 @@ public class CameraPreview {
             cameraProvider.unbindAll();
             
             // Get current camera facing from the preview
-            int currentFacing = CameraSelector.LENS_FACING_BACK; // Default to back camera
-            if (mPreviewView != null) {
-                // Try to get the current camera facing from the preview
-                CameraSelector currentSelector = new CameraSelector.Builder()
-                        .requireLensFacing(CameraSelector.LENS_FACING_BACK)
-                        .build();
-                try {
-                    Camera camera = cameraProvider.bindToLifecycle(
-                            (LifecycleOwner) activity,
-                            currentSelector,
-                            new Preview.Builder().build());
-                    currentFacing = camera.getCameraInfo().getSensorRotationDegrees() == 0 ?
-                            CameraSelector.LENS_FACING_BACK : CameraSelector.LENS_FACING_FRONT;
-                    cameraProvider.unbindAll();
-                } catch (Exception e) {
-                    // If we can't determine the current facing, default to back camera
-                }
-            }
+            final int currentFacing = getCurrentCameraFacing();
             
             // Use the current camera facing
             CameraSelector cameraSelector = new CameraSelector.Builder()
@@ -237,6 +220,28 @@ public class CameraPreview {
             e.printStackTrace();
             callback.onError(e.getMessage());
         }
+    }
+    
+    private int getCurrentCameraFacing() {
+        int currentFacing = CameraSelector.LENS_FACING_BACK; // Default to back camera
+        if (mPreviewView != null) {
+            // Try to get the current camera facing from the preview
+            CameraSelector currentSelector = new CameraSelector.Builder()
+                    .requireLensFacing(CameraSelector.LENS_FACING_BACK)
+                    .build();
+            try {
+                Camera camera = cameraProvider.bindToLifecycle(
+                        (LifecycleOwner) activity,
+                        currentSelector,
+                        new Preview.Builder().build());
+                currentFacing = camera.getCameraInfo().getSensorRotationDegrees() == 0 ?
+                        CameraSelector.LENS_FACING_BACK : CameraSelector.LENS_FACING_FRONT;
+                cameraProvider.unbindAll();
+            } catch (Exception e) {
+                // If we can't determine the current facing, default to back camera
+            }
+        }
+        return currentFacing;
     }
     
     private byte[] imageToByteArray(androidx.camera.core.ImageProxy image) {
