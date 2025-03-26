@@ -200,7 +200,23 @@ public class VideoCapture: NSObject {
     // Set high quality
     photoSettings.isHighResolutionPhotoEnabled = true
     if #available(iOS 13.0, *) {
-      photoSettings.photoQualityPrioritization = .quality
+      // Check maxPhotoQualityPrioritization before setting the value
+      let maxPrioritization = photoOutput.maxPhotoQualityPrioritization
+      print("DEBUG: Max photo quality prioritization: \(maxPrioritization.rawValue)")
+      
+      // Set prioritization to a value not higher than the max allowed
+      switch maxPrioritization {
+      case .quality:
+        photoSettings.photoQualityPrioritization = .quality
+      case .balanced:
+        photoSettings.photoQualityPrioritization = .balanced
+      case .speed:
+        photoSettings.photoQualityPrioritization = .speed
+      @unknown default:
+        photoSettings.photoQualityPrioritization = .balanced
+      }
+      
+      print("DEBUG: Setting photo quality prioritization to: \(photoSettings.photoQualityPrioritization.rawValue)")
     }
     
     // Create a delegate to handle the photo capture and retain it as a property
