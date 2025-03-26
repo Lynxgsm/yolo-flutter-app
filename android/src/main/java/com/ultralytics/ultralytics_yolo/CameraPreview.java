@@ -208,11 +208,19 @@ public class CameraPreview {
             throw new IllegalStateException("Camera preview not initialized or no frame available");
         }
 
+        // Resize bitmap to match preview dimensions
+        Bitmap resizedBitmap = Bitmap.createScaledBitmap(
+            latestFrame, 
+            mPreviewView.getWidth(), 
+            mPreviewView.getHeight(), 
+            true
+        );
+
         // Create a file to save the image
         File imageFile = new File(context.getCacheDir(), "capture_" + System.currentTimeMillis() + ".jpg");
         try {
             FileOutputStream out = new FileOutputStream(imageFile);
-            latestFrame.compress(Bitmap.CompressFormat.JPEG, 100, out);
+            resizedBitmap.compress(Bitmap.CompressFormat.JPEG, 100, out);
             out.flush();
             out.close();
             return imageFile.getAbsolutePath();
