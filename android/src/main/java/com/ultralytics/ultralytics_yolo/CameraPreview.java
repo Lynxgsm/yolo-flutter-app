@@ -37,6 +37,7 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.ultralytics.ultralytics_yolo.predict.Predictor;
 
 import java.util.concurrent.ExecutionException;
+import java.util.Map;
 
 
 public class CameraPreview {
@@ -203,22 +204,45 @@ public class CameraPreview {
         }
     }
 
-    public String captureCurrentFrame() {
+    public String captureCurrentFrame(Map<String, Double> cropRect) {
         if (latestFrame == null) {
             throw new IllegalStateException("Camera preview not initialized or no frame available");
+        }
+
+        Bitmap bitmapToCrop = latestFrame;
+        
+        // Apply cropping if specified
+        if (cropRect != null) {
+            int x = cropRect.get("x").intValue();
+            int y = cropRect.get("y").intValue();
+            int width = cropRect.get("width").intValue();
+            int height = cropRect.get("height").intValue();
+            
+            // Validate crop dimensions
+            if (x >= 0 && y >= 0 && width > 0 && height > 0 && 
+                x + width <= bitmapToCrop.getWidth() && 
+                y + height <= bitmapToCrop.getHeight()) {
+                
+                bitmapToCrop = Bitmap.createBitmap(bitmapToCrop, x, y, width, height);
+            }
         }
 
         // Create a file to save the image
         File imageFile = new File(context.getCacheDir(), "capture_" + System.currentTimeMillis() + ".jpg");
         try {
             FileOutputStream out = new FileOutputStream(imageFile);
-            latestFrame.compress(Bitmap.CompressFormat.JPEG, 100, out);
+            bitmapToCrop.compress(Bitmap.CompressFormat.JPEG, 100, out);
             out.flush();
             out.close();
             return imageFile.getAbsolutePath();
         } catch (IOException e) {
             throw new IllegalStateException("Failed to save captured frame: " + e.getMessage());
         }
+    }
+    
+    // Overload for backward compatibility
+    public String captureCurrentFrame() {
+        return captureCurrentFrame(null);
     }
     
     public void shutdown() {

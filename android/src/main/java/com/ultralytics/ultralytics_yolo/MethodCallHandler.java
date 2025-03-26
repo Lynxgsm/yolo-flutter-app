@@ -401,7 +401,8 @@ public class MethodCallHandler implements MethodChannel.MethodCallHandler {
 
     private void getVideoCapture(MethodCall call, MethodChannel.Result result) {
         try {
-            String imagePath = cameraPreview.captureCurrentFrame();
+            Map<String, Double> cropRect = call.argument("cropRect");
+            String imagePath = cameraPreview.captureCurrentFrame(cropRect);
             result.success(imagePath);
         } catch (Exception e) {
             result.error("CaptureError", e.getMessage(), null);

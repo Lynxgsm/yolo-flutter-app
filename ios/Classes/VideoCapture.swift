@@ -196,7 +196,7 @@ public class VideoCapture: NSObject {
     }
   }
 
-  func captureCurrentFrame(completion: @escaping (String?) -> Void) {
+  func captureCurrentFrame(cropRect: [String: Double]?, completion: @escaping (String?) -> Void) {
     // Create a photo settings object
     let settings = AVCapturePhotoSettings()
     
@@ -208,12 +208,42 @@ public class VideoCapture: NSObject {
         return
       }
       
+      var processedImage = image
+      
+      // Apply cropping if specified
+      if let cropRect = cropRect, 
+         let x = cropRect["x"], 
+         let y = cropRect["y"],
+         let width = cropRect["width"],
+         let height = cropRect["height"] {
+        
+        let imageWidth = image.size.width
+        let imageHeight = image.size.height
+        
+        // Validate crop dimensions
+        if x >= 0 && y >= 0 && width > 0 && height > 0 &&
+           x + width <= imageWidth && y + height <= imageHeight {
+          
+          // Calculate crop rect in pixels
+          let cropX = x
+          let cropY = y
+          let cropWidth = width
+          let cropHeight = height
+          
+          let cropRectInPixels = CGRect(x: cropX, y: cropY, width: cropWidth, height: cropHeight)
+          
+          if let cgImage = image.cgImage?.cropping(to: cropRectInPixels) {
+            processedImage = UIImage(cgImage: cgImage, scale: image.scale, orientation: image.imageOrientation)
+          }
+        }
+      }
+      
       // Create a temporary file path
       let fileName = "capture_\(Int(Date().timeIntervalSince1970)).jpg"
       let filePath = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
       
       // Convert the image to JPEG data
-      guard let imageData = image.jpegData(compressionQuality: 1.0) else {
+      guard let imageData = processedImage.jpegData(compressionQuality: 1.0) else {
         completion(nil)
         return
       }

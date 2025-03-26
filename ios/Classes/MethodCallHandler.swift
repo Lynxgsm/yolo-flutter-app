@@ -259,7 +259,8 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
   }
 
   private func getVideoCapture(args: [String: Any], result: @escaping FlutterResult) {
-    videoCapture.captureCurrentFrame { imagePath in
+    let cropRect = args["cropRect"] as? [String: Double]
+    videoCapture.captureCurrentFrame(cropRect: cropRect) { imagePath in
       if let path = imagePath {
         result(path)
       } else {
