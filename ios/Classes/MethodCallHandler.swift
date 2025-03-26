@@ -255,7 +255,7 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
     if response.starts(with: "Error") {
       result(FlutterError(code: "RECORDING_ERROR", message: response, details: nil))
     } else {
-      result("Success")
+      result(response)
     }
   }
   

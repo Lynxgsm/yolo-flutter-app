@@ -45,6 +45,7 @@ public class VideoCapture: NSObject {
   private var targetFramesPerSecond = 30.0
   private var lastFrameTime = CMTime.zero
   private var savedVideoPath: URL?
+  private var recordingFilePath: URL?
 
   public override init() {
     super.init()
@@ -183,7 +184,8 @@ public class VideoCapture: NSObject {
     let timestamp = dateFormatter.string(from: Date())
     let tempDirectory = NSTemporaryDirectory()
     let filePath = URL(fileURLWithPath: tempDirectory).appendingPathComponent("yolo_recording_\(timestamp).mp4")
-
+    
+    recordingFilePath = filePath
     print("DEBUG: Starting recording to \(filePath.path)")
     
     // Start recording
@@ -202,7 +204,11 @@ public class VideoCapture: NSObject {
     movieFileOutput.stopRecording()
     // isRecording will be set to false in the fileOutput delegate method
     
-    return "Success"
+    if let path = recordingFilePath?.path {
+      return "Success: \(path)"
+    } else {
+      return "Success"
+    }
   }
 
   // MARK: - Video Frame Capture Methods
@@ -425,6 +431,7 @@ extension VideoCapture: AVCapturePhotoCaptureDelegate {
 extension VideoCapture: AVCaptureFileOutputRecordingDelegate {
   public func fileOutput(_ output: AVCaptureFileOutput, didStartRecordingTo fileURL: URL, from connections: [AVCaptureConnection]) {
     print("DEBUG: Recording started to \(fileURL.path)")
+    recordingFilePath = fileURL
   }
   
   public func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo outputFileURL: URL, from connections: [AVCaptureConnection], error: Error?) {
@@ -436,6 +443,7 @@ extension VideoCapture: AVCaptureFileOutputRecordingDelegate {
     }
     
     print("DEBUG: Recording finished successfully to \(outputFileURL.path)")
+    recordingFilePath = outputFileURL
     
     // If you want to save to the photo library, you can add that functionality here
     // UISaveVideoAtPathToSavedPhotosAlbum(outputFileURL.path, self, #selector(video(_:didFinishSavingWithError:contextInfo:)), nil)

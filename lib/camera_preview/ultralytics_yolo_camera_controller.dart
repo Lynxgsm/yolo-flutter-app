@@ -75,24 +75,26 @@ class UltralyticsYoloCameraController
   }
 
   // Start recording
-  Future<void> startRecording() async {
+  Future<String?> startRecording() async {
     try {
       final result = await _ultralyticsYoloPlatform.startRecording();
       if (result != 'Success') {
         throw Exception('Failed to start recording: $result');
       }
+      return result;
     } catch (e) {
       rethrow;
     }
   }
 
   // Stop recording
-  Future<void> stopRecording() async {
+  Future<String?> stopRecording() async {
     try {
       final result = await _ultralyticsYoloPlatform.stopRecording();
-      if (result != 'Success') {
+      if (result == null || !result.startsWith('Success')) {
         throw Exception('Failed to stop recording: $result');
       }
+      return result;
     } catch (e) {
       rethrow;
     }
@@ -106,5 +108,23 @@ class UltralyticsYoloCameraController
   /// Stops the camera
   Future<void> pauseLivePrediction() async {
     await _ultralyticsYoloPlatform.pauseLivePrediction();
+  }
+
+  /// Starts saving camera frames to a video file
+  Future<String?> saveVideo({String? path}) async {
+    try {
+      return await _ultralyticsYoloPlatform.saveVideo(path: path);
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  /// Stops saving camera frames and finalizes the video file
+  Future<String?> stopSavingVideo() async {
+    try {
+      return await _ultralyticsYoloPlatform.stopSavingVideo();
+    } catch (e) {
+      rethrow;
+    }
   }
 }

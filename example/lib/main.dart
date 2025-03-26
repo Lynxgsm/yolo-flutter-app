@@ -33,46 +33,46 @@ class _MyAppState extends State<MyApp> {
 
             return !allPermissionsGranted
                 ? const Center(
-              child: Text("Error requesting permissions"),
-            )
+                    child: Text("Error requesting permissions"),
+                  )
                 : FutureBuilder<ObjectDetector>(
-              future: _initObjectDetectorWithLocalModel(),
-              builder: (context, snapshot) {
-                final predictor = snapshot.data;
+                    future: _initObjectDetectorWithLocalModel(),
+                    builder: (context, snapshot) {
+                      final predictor = snapshot.data;
 
-                return predictor == null
-                    ? Container()
-                    : Stack(
-                  children: [
-                    UltralyticsYoloCameraPreview(
-                      controller: controller,
-                      predictor: predictor,
-                      onCameraCreated: () {
-                        predictor.loadModel(useGpu: true);
-                      },
-                    ),
-                    StreamBuilder<double?>(
-                      stream: predictor.inferenceTime,
-                      builder: (context, snapshot) {
-                        final inferenceTime = snapshot.data;
+                      return predictor == null
+                          ? Container()
+                          : Stack(
+                              children: [
+                                UltralyticsYoloCameraPreview(
+                                  controller: controller,
+                                  predictor: predictor,
+                                  onCameraCreated: () {
+                                    predictor.loadModel(useGpu: true);
+                                  },
+                                ),
+                                StreamBuilder<double?>(
+                                  stream: predictor.inferenceTime,
+                                  builder: (context, snapshot) {
+                                    final inferenceTime = snapshot.data;
 
-                        return StreamBuilder<double?>(
-                          stream: predictor.fpsRate,
-                          builder: (context, snapshot) {
-                            final fpsRate = snapshot.data;
+                                    return StreamBuilder<double?>(
+                                      stream: predictor.fpsRate,
+                                      builder: (context, snapshot) {
+                                        final fpsRate = snapshot.data;
 
-                            return Times(
-                              inferenceTime: inferenceTime,
-                              fpsRate: fpsRate,
+                                        return Times(
+                                          inferenceTime: inferenceTime,
+                                          fpsRate: fpsRate,
+                                        );
+                                      },
+                                    );
+                                  },
+                                ),
+                              ],
                             );
-                          },
-                        );
-                      },
-                    ),
-                  ],
-                );
-              },
-            );
+                    },
+                  );
             // : FutureBuilder<ObjectClassifier>(
             //     future: _initObjectClassifierWithLocalModel(),
             //     builder: (context, snapshot) {
@@ -113,11 +113,112 @@ class _MyAppState extends State<MyApp> {
             //   );
           },
         ),
-        floatingActionButton: FloatingActionButton(
-          child: const Icon(Icons.cameraswitch),
-          onPressed: () {
-            controller.toggleLensDirection();
-          },
+        floatingActionButton: Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            FloatingActionButton(
+              heroTag: "saveVideo",
+              child: const Icon(Icons.videocam),
+              onPressed: () async {
+                try {
+                  // Start recording using the standard recording API
+                  final result = await controller.startRecording();
+
+                  // Show toast or message to indicate recording started
+                  ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Recording started')));
+
+                  // Schedule recording to stop after 5 seconds for demo purposes
+                  Future.delayed(const Duration(seconds: 5), () async {
+                    try {
+                      final stopResult = await controller.stopRecording();
+                      String message = 'Video saved successfully';
+
+                      // Extract the path from the result string if present
+                      if (stopResult != null &&
+                          stopResult.startsWith('Success: ')) {
+                        final videoPath =
+                            stopResult.substring('Success: '.length);
+                        message = 'Video saved at: $videoPath';
+                      }
+
+                      ScaffoldMessenger.of(context)
+                          .showSnackBar(SnackBar(content: Text(message)));
+                    } catch (e) {
+                      print('Error stopping recording: $e');
+                      ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error stopping: $e')));
+                    }
+                  });
+                } catch (e) {
+                  print('Error starting recording: $e');
+                  ScaffoldMessenger.of(context)
+                      .showSnackBar(SnackBar(content: Text('Error: $e')));
+                }
+              },
+            ),
+            const SizedBox(width: 16),
+            FloatingActionButton(
+              heroTag: "stopSaveVideo",
+              child: const Icon(Icons.stop),
+              onPressed: () async {
+                try {
+                  // Get the directory for saving the video
+                  final directory = await getApplicationDocumentsDirectory();
+                  final path = '${directory.path}/frame_capture_video.mp4';
+
+                  // Start saving video frames
+                  final result = await controller.saveVideo(path: path);
+
+                  // Show toast or message to indicate frame capture started
+                  String message = 'Started frame capture';
+                  if (result != null && result.startsWith('Success: ')) {
+                    final videoPath = result.substring('Success: '.length);
+                    message = 'Frame capture started, will save to: $videoPath';
+                  }
+
+                  ScaffoldMessenger.of(context)
+                      .showSnackBar(SnackBar(content: Text(message)));
+
+                  // Schedule frame capture to stop after 5 seconds for demo purposes
+                  Future.delayed(const Duration(seconds: 5), () async {
+                    try {
+                      final stopResult = await controller.stopSavingVideo();
+                      String stopMessage = 'Frame capture completed';
+
+                      // Extract the path from the result string if present
+                      if (stopResult != null &&
+                          stopResult.startsWith('Success: ')) {
+                        final videoPath =
+                            stopResult.substring('Success: '.length);
+                        stopMessage =
+                            'Frame capture video saved at: $videoPath';
+                      }
+
+                      ScaffoldMessenger.of(context)
+                          .showSnackBar(SnackBar(content: Text(stopMessage)));
+                    } catch (e) {
+                      print('Error stopping frame capture: $e');
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text('Error stopping frame capture: $e')));
+                    }
+                  });
+                } catch (e) {
+                  print('Error starting frame capture: $e');
+                  ScaffoldMessenger.of(context)
+                      .showSnackBar(SnackBar(content: Text('Error: $e')));
+                }
+              },
+            ),
+            const SizedBox(width: 16),
+            FloatingActionButton(
+              heroTag: "switchCamera",
+              child: const Icon(Icons.cameraswitch),
+              onPressed: () {
+                controller.toggleLensDirection();
+              },
+            ),
+          ],
         ),
       ),
     );
@@ -175,7 +276,8 @@ class _MyAppState extends State<MyApp> {
     final file = io.File(path);
     if (!await file.exists()) {
       final byteData = await rootBundle.load(assetPath);
-      await file.writeAsBytes(byteData.buffer.asUint8List(byteData.offsetInBytes, byteData.lengthInBytes));
+      await file.writeAsBytes(byteData.buffer
+          .asUint8List(byteData.offsetInBytes, byteData.lengthInBytes));
     }
     return file.path;
   }
@@ -193,8 +295,10 @@ class _MyAppState extends State<MyApp> {
       return true;
     } else {
       try {
-        Map<Permission, PermissionStatus> statuses = await permissions.request();
-        return statuses.values.every((status) => status == PermissionStatus.granted);
+        Map<Permission, PermissionStatus> statuses =
+            await permissions.request();
+        return statuses.values
+            .every((status) => status == PermissionStatus.granted);
       } on Exception catch (_) {
         return false;
       }
