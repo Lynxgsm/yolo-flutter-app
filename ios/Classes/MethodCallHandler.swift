@@ -81,6 +81,10 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
       startRecording(args: args, result: result)
     case "stopRecording":
       stopRecording(args: args, result: result)
+    case "saveVideo":
+      saveVideo(args: args, result: result)
+    case "stopSavingVideo":
+      stopSavingVideo(args: args, result: result)
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -250,8 +254,47 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
     let response = videoCapture.stopRecording()
     if response.starts(with: "Error") {
       result(FlutterError(code: "RECORDING_ERROR", message: response, details: nil))
+    } else if response.starts(with: "Success: ") {
+      // Extract the path and verify it exists
+      let path = String(response.dropFirst("Success: ".count))
+      if FileManager.default.fileExists(atPath: path) {
+        result(response)
+      } else {
+        result(FlutterError(code: "RECORDING_ERROR", message: "File not found at path: \(path)", details: nil))
+      }
     } else {
-      result("Success")
+      result(response)
+    }
+  }
+  
+  // MARK: - Frame Capture Video Methods
+  private func saveVideo(args: [String: Any], result: @escaping FlutterResult) {
+    let path = args["path"] as? String
+    
+    videoCapture.saveVideo(toPath: path) { response in
+      if response.starts(with: "Error") {
+        result(FlutterError(code: "SAVE_VIDEO_ERROR", message: response, details: nil))
+      } else {
+        result(response)
+      }
+    }
+  }
+  
+  private func stopSavingVideo(args: [String: Any], result: @escaping FlutterResult) {
+    videoCapture.stopSavingVideo { response in
+      if response.starts(with: "Error") {
+        result(FlutterError(code: "SAVE_VIDEO_ERROR", message: response, details: nil))
+      } else if response.starts(with: "Success: ") {
+        // Extract the path and verify it exists
+        let path = String(response.dropFirst("Success: ".count))
+        if FileManager.default.fileExists(atPath: path) {
+          result(response)
+        } else {
+          result(FlutterError(code: "SAVE_VIDEO_ERROR", message: "File not found at path: \(path)", details: nil))
+        }
+      } else {
+        result(response)
+      }
     }
   }
 

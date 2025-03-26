@@ -1,4 +1,5 @@
 import 'dart:io' as io;
+import 'dart:math' show min;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -33,46 +34,46 @@ class _MyAppState extends State<MyApp> {
 
             return !allPermissionsGranted
                 ? const Center(
-              child: Text("Error requesting permissions"),
-            )
+                    child: Text("Error requesting permissions"),
+                  )
                 : FutureBuilder<ObjectDetector>(
-              future: _initObjectDetectorWithLocalModel(),
-              builder: (context, snapshot) {
-                final predictor = snapshot.data;
+                    future: _initObjectDetectorWithLocalModel(),
+                    builder: (context, snapshot) {
+                      final predictor = snapshot.data;
 
-                return predictor == null
-                    ? Container()
-                    : Stack(
-                  children: [
-                    UltralyticsYoloCameraPreview(
-                      controller: controller,
-                      predictor: predictor,
-                      onCameraCreated: () {
-                        predictor.loadModel(useGpu: true);
-                      },
-                    ),
-                    StreamBuilder<double?>(
-                      stream: predictor.inferenceTime,
-                      builder: (context, snapshot) {
-                        final inferenceTime = snapshot.data;
+                      return predictor == null
+                          ? Container()
+                          : Stack(
+                              children: [
+                                UltralyticsYoloCameraPreview(
+                                  controller: controller,
+                                  predictor: predictor,
+                                  onCameraCreated: () {
+                                    predictor.loadModel(useGpu: true);
+                                  },
+                                ),
+                                StreamBuilder<double?>(
+                                  stream: predictor.inferenceTime,
+                                  builder: (context, snapshot) {
+                                    final inferenceTime = snapshot.data;
 
-                        return StreamBuilder<double?>(
-                          stream: predictor.fpsRate,
-                          builder: (context, snapshot) {
-                            final fpsRate = snapshot.data;
+                                    return StreamBuilder<double?>(
+                                      stream: predictor.fpsRate,
+                                      builder: (context, snapshot) {
+                                        final fpsRate = snapshot.data;
 
-                            return Times(
-                              inferenceTime: inferenceTime,
-                              fpsRate: fpsRate,
+                                        return Times(
+                                          inferenceTime: inferenceTime,
+                                          fpsRate: fpsRate,
+                                        );
+                                      },
+                                    );
+                                  },
+                                ),
+                              ],
                             );
-                          },
-                        );
-                      },
-                    ),
-                  ],
-                );
-              },
-            );
+                    },
+                  );
             // : FutureBuilder<ObjectClassifier>(
             //     future: _initObjectClassifierWithLocalModel(),
             //     builder: (context, snapshot) {
@@ -113,11 +114,282 @@ class _MyAppState extends State<MyApp> {
             //   );
           },
         ),
-        floatingActionButton: FloatingActionButton(
-          child: const Icon(Icons.cameraswitch),
-          onPressed: () {
-            controller.toggleLensDirection();
-          },
+        floatingActionButton: Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FloatingActionButton(
+                  heroTag: "saveVideo",
+                  child: const Icon(Icons.video_camera_back),
+                  onPressed: () async {
+                    try {
+                      // Start recording using the standard recording API
+                      final result = await controller.startRecording();
+
+                      // Show toast or message to indicate recording started
+                      ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Recording started')));
+
+                      // Schedule recording to stop after 5 seconds for demo purposes
+                      Future.delayed(const Duration(seconds: 5), () async {
+                        try {
+                          final stopResult = await controller.stopRecording();
+                          String message = 'Recording stopped';
+
+                          // Extract the path from the result string if present
+                          if (stopResult != null &&
+                              stopResult.startsWith('Success: ')) {
+                            final videoPath =
+                                stopResult.substring('Success: '.length);
+                            message = 'Video saved at: $videoPath';
+
+                            // Verify the file exists with extended debugging
+                            try {
+                              final file = io.File(videoPath);
+                              print('Checking file at path: $videoPath');
+
+                              final directory = io.Directory(
+                                  io.Directory(videoPath).parent.path);
+                              print(
+                                  'Directory exists: ${directory.existsSync()}');
+
+                              if (directory.existsSync()) {
+                                print('Directory contents:');
+                                directory.listSync().forEach((entity) {
+                                  print(' - ${entity.path}');
+                                  if (entity is io.File) {
+                                    try {
+                                      final fileSize = entity.lengthSync();
+                                      final lastModified =
+                                          entity.lastModifiedSync();
+                                      print('   Size: $fileSize bytes');
+                                      print('   Last modified: $lastModified');
+                                      print(
+                                          '   Can read: ${entity.existsSync()}');
+                                    } catch (e) {
+                                      print('   Error getting file info: $e');
+                                    }
+                                  }
+                                });
+                              }
+
+                              // Check if file exists and get size
+                              if (await file.exists()) {
+                                try {
+                                  final size = await file.length();
+                                  final lastModified =
+                                      await file.lastModified();
+                                  final stat = await file.stat();
+
+                                  print('File exists with size: $size bytes');
+                                  print('Last modified: $lastModified');
+                                  print('File stats: $stat');
+
+                                  message =
+                                      'Video saved at: $videoPath (${(size / 1024).toStringAsFixed(1)} KB)';
+
+                                  // Try to read the first few bytes to check if file is accessible
+                                  try {
+                                    final randomAccessFile =
+                                        await file.open(mode: io.FileMode.read);
+                                    final bytes = await randomAccessFile
+                                        .read(min(1024, size.toInt()));
+                                    await randomAccessFile.close();
+                                    print(
+                                        'Successfully read ${bytes.length} bytes from file');
+                                  } catch (e) {
+                                    print('Error reading file content: $e');
+                                  }
+                                } catch (e) {
+                                  print('Error getting file details: $e');
+                                  message =
+                                      'File exists but error getting details: $e';
+                                }
+                              } else {
+                                message =
+                                    'File path returned but file not found: $videoPath';
+                                print('File does not exist at: $videoPath');
+                              }
+                            } catch (e) {
+                              print('Error checking file: $e');
+                            }
+                          }
+
+                          ScaffoldMessenger.of(context)
+                              .showSnackBar(SnackBar(content: Text(message)));
+                        } catch (e) {
+                          print('Error stopping recording: $e');
+                          ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Error stopping: $e')));
+                        }
+                      });
+                    } catch (e) {
+                      print('Error starting recording: $e');
+                      ScaffoldMessenger.of(context)
+                          .showSnackBar(SnackBar(content: Text('Error: $e')));
+                    }
+                  },
+                ),
+                const SizedBox(height: 8),
+                const Text('Record', style: TextStyle(color: Colors.white)),
+              ],
+            ),
+            const SizedBox(width: 16),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FloatingActionButton(
+                  heroTag: "stopSaveVideo",
+                  child: const Icon(Icons.video_collection),
+                  onPressed: () async {
+                    try {
+                      // Get the directory for saving the video
+                      final directory =
+                          await getApplicationDocumentsDirectory();
+                      final path = '${directory.path}/frame_capture_video.mp4';
+
+                      // Start saving video frames
+                      final result = await controller.saveVideo(path: path);
+
+                      // Show toast or message to indicate frame capture started
+                      String message = 'Started frame capture';
+                      if (result != null && result.startsWith('Success: ')) {
+                        final videoPath = result.substring('Success: '.length);
+                        message =
+                            'Frame capture started, will save to: $videoPath';
+                      }
+
+                      ScaffoldMessenger.of(context)
+                          .showSnackBar(SnackBar(content: Text(message)));
+
+                      // Schedule frame capture to stop after 5 seconds for demo purposes
+                      Future.delayed(const Duration(seconds: 5), () async {
+                        try {
+                          final stopResult = await controller.stopSavingVideo();
+                          String stopMessage = 'Frame capture completed';
+
+                          // Extract the path from the result string if present
+                          if (stopResult != null &&
+                              stopResult.startsWith('Success: ')) {
+                            final videoPath =
+                                stopResult.substring('Success: '.length);
+                            stopMessage =
+                                'Frame capture video saved at: $videoPath';
+
+                            // Verify the file exists with extended debugging
+                            try {
+                              final file = io.File(videoPath);
+                              print(
+                                  'Checking frame capture file at path: $videoPath');
+
+                              final directory = io.Directory(
+                                  io.Directory(videoPath).parent.path);
+                              print(
+                                  'Directory exists: ${directory.existsSync()}');
+
+                              if (directory.existsSync()) {
+                                print('Directory contents:');
+                                directory.listSync().forEach((entity) {
+                                  print(' - ${entity.path}');
+                                  if (entity is io.File) {
+                                    try {
+                                      final fileSize = entity.lengthSync();
+                                      final lastModified =
+                                          entity.lastModifiedSync();
+                                      print('   Size: $fileSize bytes');
+                                      print('   Last modified: $lastModified');
+                                      print(
+                                          '   Can read: ${entity.existsSync()}');
+                                    } catch (e) {
+                                      print('   Error getting file info: $e');
+                                    }
+                                  }
+                                });
+                              }
+
+                              // Check if file exists and get size
+                              if (await file.exists()) {
+                                try {
+                                  final size = await file.length();
+                                  final lastModified =
+                                      await file.lastModified();
+                                  final stat = await file.stat();
+
+                                  print(
+                                      'Frame file exists with size: $size bytes');
+                                  print('Last modified: $lastModified');
+                                  print('File stats: $stat');
+
+                                  stopMessage =
+                                      'Frame video saved at: $videoPath (${(size / 1024).toStringAsFixed(1)} KB)';
+
+                                  // Try to read the first few bytes to check if file is accessible
+                                  try {
+                                    final randomAccessFile =
+                                        await file.open(mode: io.FileMode.read);
+                                    final bytes = await randomAccessFile
+                                        .read(min(1024, size.toInt()));
+                                    await randomAccessFile.close();
+                                    print(
+                                        'Successfully read ${bytes.length} bytes from frame file');
+                                  } catch (e) {
+                                    print(
+                                        'Error reading frame file content: $e');
+                                  }
+                                } catch (e) {
+                                  print('Error getting frame file details: $e');
+                                  stopMessage =
+                                      'Frame file exists but error getting details: $e';
+                                }
+                              } else {
+                                stopMessage =
+                                    'File path returned but frame file not found: $videoPath';
+                                print(
+                                    'Frame file does not exist at: $videoPath');
+                              }
+                            } catch (e) {
+                              print('Error checking frame file: $e');
+                            }
+                          }
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(stopMessage)));
+                        } catch (e) {
+                          print('Error stopping frame capture: $e');
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                              content:
+                                  Text('Error stopping frame capture: $e')));
+                        }
+                      });
+                    } catch (e) {
+                      print('Error starting frame capture: $e');
+                      ScaffoldMessenger.of(context)
+                          .showSnackBar(SnackBar(content: Text('Error: $e')));
+                    }
+                  },
+                ),
+                const SizedBox(height: 8),
+                const Text('Frames', style: TextStyle(color: Colors.white)),
+              ],
+            ),
+            const SizedBox(width: 16),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FloatingActionButton(
+                  heroTag: "switchCamera",
+                  child: const Icon(Icons.cameraswitch),
+                  onPressed: () {
+                    controller.toggleLensDirection();
+                  },
+                ),
+                const SizedBox(height: 8),
+                const Text('Switch', style: TextStyle(color: Colors.white)),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -175,7 +447,8 @@ class _MyAppState extends State<MyApp> {
     final file = io.File(path);
     if (!await file.exists()) {
       final byteData = await rootBundle.load(assetPath);
-      await file.writeAsBytes(byteData.buffer.asUint8List(byteData.offsetInBytes, byteData.lengthInBytes));
+      await file.writeAsBytes(byteData.buffer
+          .asUint8List(byteData.offsetInBytes, byteData.lengthInBytes));
     }
     return file.path;
   }
@@ -193,8 +466,10 @@ class _MyAppState extends State<MyApp> {
       return true;
     } else {
       try {
-        Map<Permission, PermissionStatus> statuses = await permissions.request();
-        return statuses.values.every((status) => status == PermissionStatus.granted);
+        Map<Permission, PermissionStatus> statuses =
+            await permissions.request();
+        return statuses.values
+            .every((status) => status == PermissionStatus.granted);
       } on Exception catch (_) {
         return false;
       }

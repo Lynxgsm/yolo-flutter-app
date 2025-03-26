@@ -118,4 +118,14 @@ abstract class UltralyticsYoloPlatform extends PlatformInterface {
   Future<String?> stopRecording() {
     throw UnimplementedError('stopRecording has not been implemented.');
   }
+
+  /// Start saving each camera frame to a video file
+  Future<String?> saveVideo({String? path}) {
+    throw UnimplementedError('saveVideo has not been implemented.');
+  }
+
+  /// Stop saving camera frames and finalize the video file
+  Future<String?> stopSavingVideo() {
+    throw UnimplementedError('stopSavingVideo has not been implemented.');
+  }
 }
