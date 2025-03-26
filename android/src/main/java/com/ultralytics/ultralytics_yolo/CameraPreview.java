@@ -220,32 +220,49 @@ public class CameraPreview {
     }
     
     private byte[] imageToByteArray(androidx.camera.core.ImageProxy image) {
-        androidx.camera.core.ImageProxy.PlaneProxy[] planes = image.getPlanes();
-        androidx.camera.core.ImageProxy.PlaneProxy yPlane = planes[0];
-        androidx.camera.core.ImageProxy.PlaneProxy uPlane = planes[1];
-        androidx.camera.core.ImageProxy.PlaneProxy vPlane = planes[2];
+        // Get the image format
+        int format = image.getFormat();
+        
+        // Handle different image formats
+        if (format == ImageFormat.YUV_420_888) {
+            // YUV420 format
+            androidx.camera.core.ImageProxy.PlaneProxy[] planes = image.getPlanes();
+            androidx.camera.core.ImageProxy.PlaneProxy yPlane = planes[0];
+            androidx.camera.core.ImageProxy.PlaneProxy uPlane = planes[1];
+            androidx.camera.core.ImageProxy.PlaneProxy vPlane = planes[2];
 
-        ByteBuffer yBuffer = yPlane.getBuffer();
-        ByteBuffer uBuffer = uPlane.getBuffer();
-        ByteBuffer vBuffer = vPlane.getBuffer();
+            ByteBuffer yBuffer = yPlane.getBuffer();
+            ByteBuffer uBuffer = uPlane.getBuffer();
+            ByteBuffer vBuffer = vPlane.getBuffer();
 
-        int ySize = yBuffer.remaining();
-        int uSize = uBuffer.remaining();
-        int vSize = vBuffer.remaining();
+            int ySize = yBuffer.remaining();
+            int uSize = uBuffer.remaining();
+            int vSize = vBuffer.remaining();
 
-        byte[] nv21 = new byte[ySize + uSize + vSize];
+            byte[] nv21 = new byte[ySize + uSize + vSize];
 
-        // U and V are swapped
-        yBuffer.get(nv21, 0, ySize);
-        vBuffer.get(nv21, ySize, vSize);
-        uBuffer.get(nv21, ySize + vSize, uSize);
+            // U and V are swapped
+            yBuffer.get(nv21, 0, ySize);
+            vBuffer.get(nv21, ySize, vSize);
+            uBuffer.get(nv21, ySize + vSize, uSize);
 
-        // Convert NV21 to JPEG
-        YuvImage yuvImage = new YuvImage(nv21, ImageFormat.NV21, image.getWidth(), image.getHeight(), null);
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        yuvImage.compressToJpeg(new Rect(0, 0, image.getWidth(), image.getHeight()), 100, out);
+            // Convert NV21 to JPEG
+            YuvImage yuvImage = new YuvImage(nv21, ImageFormat.NV21, image.getWidth(), image.getHeight(), null);
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            yuvImage.compressToJpeg(new Rect(0, 0, image.getWidth(), image.getHeight()), 100, out);
 
-        return out.toByteArray();
+            return out.toByteArray();
+        } else if (format == ImageFormat.JPEG) {
+            // JPEG format
+            androidx.camera.core.ImageProxy.PlaneProxy[] planes = image.getPlanes();
+            ByteBuffer buffer = planes[0].getBuffer();
+            byte[] bytes = new byte[buffer.remaining()];
+            buffer.get(bytes);
+            return bytes;
+        } else {
+            // Unsupported format
+            throw new IllegalArgumentException("Unsupported image format: " + format);
+        }
     }
 
     public String startRecording() {
