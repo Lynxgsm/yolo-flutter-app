@@ -168,9 +168,29 @@ public class CameraPreview {
             // Temporarily unbind and rebind with image capture
             cameraProvider.unbindAll();
             
-            // Use the same camera facing as the current preview
+            // Get current camera facing from the preview
+            int currentFacing = CameraSelector.LENS_FACING_BACK; // Default to back camera
+            if (mPreviewView != null) {
+                // Try to get the current camera facing from the preview
+                CameraSelector currentSelector = new CameraSelector.Builder()
+                        .requireLensFacing(CameraSelector.LENS_FACING_BACK)
+                        .build();
+                try {
+                    Camera camera = cameraProvider.bindToLifecycle(
+                            (LifecycleOwner) activity,
+                            currentSelector,
+                            new Preview.Builder().build());
+                    currentFacing = camera.getCameraInfo().getSensorRotationDegrees() == 0 ?
+                            CameraSelector.LENS_FACING_BACK : CameraSelector.LENS_FACING_FRONT;
+                    cameraProvider.unbindAll();
+                } catch (Exception e) {
+                    // If we can't determine the current facing, default to back camera
+                }
+            }
+            
+            // Use the current camera facing
             CameraSelector cameraSelector = new CameraSelector.Builder()
-                    .requireLensFacing(CameraSelector.LENS_FACING_BACK)  // Default to back camera
+                    .requireLensFacing(currentFacing)
                     .build();
                     
             // Rebind with image capture
@@ -198,7 +218,7 @@ public class CameraPreview {
                             
                             // Restore camera setup
                             cameraProvider.unbindAll();
-                            bindPreview(CameraSelector.LENS_FACING_BACK);  // Restore with back camera
+                            bindPreview(currentFacing);  // Restore with current camera facing
                             
                             // Return the bytes
                             callback.onPictureTaken(bytes);
@@ -208,7 +228,7 @@ public class CameraPreview {
                         public void onError(@NonNull androidx.camera.core.ImageCaptureException exception) {
                             // Restore camera setup on error
                             cameraProvider.unbindAll();
-                            bindPreview(CameraSelector.LENS_FACING_BACK);  // Restore with back camera
+                            bindPreview(currentFacing);  // Restore with current camera facing
                             
                             callback.onError(exception.getMessage());
                         }
