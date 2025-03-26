@@ -185,10 +185,10 @@ public class VideoCapture: NSObject {
   }
   
   public func stopRecording(completion: @escaping (Bool) -> Void) {
-    if let videoOutput = videoOutput {
-      videoOutput.stopRecording { success in
-        completion(success)
-      }
+    if isRecording {
+      movieFileOutput.stopRecording()
+      isRecording = false
+      completion(true)
     } else {
       completion(false)
     }
