@@ -61,6 +61,7 @@ android {
         implementation "androidx.camera:camera-lifecycle:${camerax_version}"
         implementation "androidx.camera:camera-view:${camerax_version}"
         implementation "androidx.camera:camera-extensions:${camerax_version}"
+        implementation "androidx.camera:camera-video:${camerax_version}"
 
         // Tensorflow Lite
 //        implementation 'org.tensorflow:tensorflow-lite:2.10.0'
