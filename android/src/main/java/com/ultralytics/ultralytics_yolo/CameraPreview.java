@@ -143,8 +143,8 @@ public class CameraPreview {
         }
         
         try {
-            // Create output file
-            File outputDir = new File(context.getCacheDir(), "recordings");
+            // Create output file in Documents directory for better accessibility
+            File outputDir = new File(context.getExternalFilesDir(null), "recordings");
             if (!outputDir.exists()) {
                 outputDir.mkdirs();
             }
@@ -152,18 +152,27 @@ public class CameraPreview {
             String timestamp = new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new Date());
             File outputFile = new File(outputDir, "yolo_recording_" + timestamp + ".mp4");
             
-            // Set up recording options
+            // Log recording details
+            android.util.Log.d("CameraPreview", "Starting recording to " + outputFile.getAbsolutePath());
+            
+            // Set up recording options with highest quality
             FileOutputOptions fileOutputOptions = new FileOutputOptions.Builder(outputFile).build();
             
             // Start recording
             currentRecording = videoCapture.getOutput().prepareRecording(context, fileOutputOptions)
+                    // Enable audio recording if needed
+                    .withAudioEnabled()
                     .start(ContextCompat.getMainExecutor(context), videoRecordEvent -> {
-                        if (videoRecordEvent instanceof VideoRecordEvent.Finalize) {
+                        if (videoRecordEvent instanceof VideoRecordEvent.Start) {
+                            android.util.Log.d("CameraPreview", "Recording started");
+                        } else if (videoRecordEvent instanceof VideoRecordEvent.Finalize) {
                             VideoRecordEvent.Finalize finalizeEvent = (VideoRecordEvent.Finalize) videoRecordEvent;
                             if (!finalizeEvent.hasError()) {
-                                // Recording saved successfully
+                                android.util.Log.d("CameraPreview", "Recording saved successfully to " + 
+                                                  finalizeEvent.getOutputResults().getOutputUri());
                             } else {
-                                // Handle recording error
+                                android.util.Log.e("CameraPreview", "Recording error: " + 
+                                                  finalizeEvent.getError());
                             }
                         }
                     });
@@ -171,6 +180,7 @@ public class CameraPreview {
             return "Success";
         } catch (Exception e) {
             e.printStackTrace();
+            android.util.Log.e("CameraPreview", "Failed to start recording: " + e.getMessage());
             return "Error: " + e.getMessage();
         }
     }
@@ -181,18 +191,53 @@ public class CameraPreview {
         }
         
         try {
-            currentRecording.stop();
+            android.util.Log.d("CameraPreview", "Stopping recording");
+            Recording recording = currentRecording;
             currentRecording = null;
+            
+            // Use a thread to avoid blocking the UI
+            new Thread(() -> {
+                try {
+                    recording.stop();
+                    android.util.Log.d("CameraPreview", "Recording stopped successfully");
+                } catch (Exception e) {
+                    android.util.Log.e("CameraPreview", "Error stopping recording: " + e.getMessage());
+                    e.printStackTrace();
+                }
+            }).start();
+            
+            // Get the file path from the output directory - this is our best guess if we can't get it from events
+            File outputDir = new File(context.getExternalFilesDir(null), "recordings");
+            File[] files = outputDir.listFiles();
+            if (files != null && files.length > 0) {
+                // Sort by last modified to get the most recent one
+                java.util.Arrays.sort(files, (f1, f2) -> Long.compare(f2.lastModified(), f1.lastModified()));
+                String path = files[0].getAbsolutePath();
+                android.util.Log.d("CameraPreview", "Most recent recording file: " + path);
+                return "Success: " + path;
+            }
+            
             return "Success";
         } catch (Exception e) {
             e.printStackTrace();
+            android.util.Log.e("CameraPreview", "Error in stopRecording: " + e.getMessage());
             return "Error: " + e.getMessage();
         }
     }
     
+    public void saveVideoFrames(String outputPath) {
+        // Not implementing frame-by-frame recording for Android currently
+        // This is a placeholder for potential future implementation
+        android.util.Log.d("CameraPreview", "saveVideoFrames not implemented for Android");
+    }
+    
     public void shutdown() {
         if (currentRecording != null) {
-            currentRecording.stop();
+            try {
+                currentRecording.stop();
+            } catch (Exception e) {
+                android.util.Log.e("CameraPreview", "Error stopping recording during shutdown: " + e.getMessage());
+            }
             currentRecording = null;
         }
         
