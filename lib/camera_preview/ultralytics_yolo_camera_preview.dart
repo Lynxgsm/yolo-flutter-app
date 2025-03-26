@@ -66,125 +66,127 @@ class _UltralyticsYoloCameraPreviewState
     return ValueListenableBuilder<UltralyticsYoloCameraValue>(
       valueListenable: widget.controller,
       builder: (context, value, child) {
-        return Stack(
-          children: [
-            // Camera preview
-            () {
-              final creationParams = <String, dynamic>{
-                'lensDirection': widget.controller.value.lensDirection,
-                'format': widget.predictor?.model.format.name,
-              };
+        return SafeArea(
+          child: Stack(
+            children: [
+              // Camera preview
+              () {
+                final creationParams = <String, dynamic>{
+                  'lensDirection': widget.controller.value.lensDirection,
+                  'format': widget.predictor?.model.format.name,
+                };
 
-              switch (defaultTargetPlatform) {
-                case TargetPlatform.android:
-                  return AndroidView(
-                    viewType: _viewType,
-                    onPlatformViewCreated: _onPlatformViewCreated,
-                    creationParams: creationParams,
-                    creationParamsCodec: const StandardMessageCodec(),
-                  );
-                case TargetPlatform.iOS:
-                  return UiKitView(
-                    viewType: _viewType,
-                    creationParams: creationParams,
-                    onPlatformViewCreated: _onPlatformViewCreated,
-                    creationParamsCodec: const StandardMessageCodec(),
-                  );
-                case TargetPlatform.fuchsia ||
-                      TargetPlatform.linux ||
-                      TargetPlatform.windows ||
-                      TargetPlatform.macOS:
-                  return Container();
-              }
-            }(),
-
-            // Results
-            () {
-              if (widget.predictor == null) {
-                return widget.loadingPlaceholder ?? Container();
-              }
-
-              switch (widget.predictor.runtimeType) {
-                case ObjectDetector:
-                  return StreamBuilder(
-                    stream: (widget.predictor! as ObjectDetector)
-                        .detectionResultStream,
-                    builder: (
-                      BuildContext context,
-                      AsyncSnapshot<List<DetectedObject?>?> snapshot,
-                    ) {
-                      if (snapshot.data == null) return Container();
-
-                      return CustomPaint(
-                        painter: ObjectDetectorPainter(
-                          snapshot.data! as List<DetectedObject>,
-                          widget.boundingBoxesColorList,
-                          widget.controller.value.strokeWidth,
-                        ),
-                      );
-                    },
-                  );
-                case ImageClassifier:
-                  return widget.classificationOverlay ??
-                      StreamBuilder(
-                        stream: (widget.predictor! as ImageClassifier)
-                            .classificationResultStream,
-                        builder: (context, snapshot) {
-                          final classificationResults = snapshot.data;
-
-                          if (classificationResults == null ||
-                              classificationResults.isEmpty) {
-                            return Container();
-                          }
-
-                          return ClassificationResultOverlay(
-                            classificationResults: classificationResults,
-                          );
-                        },
-                      );
-                default:
-                  return Container();
-              }
-            }(),
-
-            // Zoom detector
-            GestureDetector(
-              onScaleUpdate: (details) {
-                if (details.pointerCount == 2) {
-                  // Calculate the new zoom factor
-                  var newZoomFactor = _currentZoomFactor * details.scale;
-
-                  // Adjust the sensitivity for zoom out
-                  if (newZoomFactor < _currentZoomFactor) {
-                    newZoomFactor = _currentZoomFactor -
-                        (_zoomSensitivity *
-                            (_currentZoomFactor - newZoomFactor));
-                  } else {
-                    newZoomFactor = _currentZoomFactor +
-                        (_zoomSensitivity *
-                            (newZoomFactor - _currentZoomFactor));
-                  }
-
-                  // Limit the zoom factor to a range between
-                  // _minZoomLevel and _maxZoomLevel
-                  final clampedZoomFactor =
-                      max(_minZoomLevel, min(_maxZoomLevel, newZoomFactor));
-
-                  // Update the zoom factor
-                  _ultralyticsYoloPlatform.setZoomRatio(clampedZoomFactor);
-
-                  // Update the current zoom factor for the next update
-                  _currentZoomFactor = clampedZoomFactor;
+                switch (defaultTargetPlatform) {
+                  case TargetPlatform.android:
+                    return AndroidView(
+                      viewType: _viewType,
+                      onPlatformViewCreated: _onPlatformViewCreated,
+                      creationParams: creationParams,
+                      creationParamsCodec: const StandardMessageCodec(),
+                    );
+                  case TargetPlatform.iOS:
+                    return UiKitView(
+                      viewType: _viewType,
+                      creationParams: creationParams,
+                      onPlatformViewCreated: _onPlatformViewCreated,
+                      creationParamsCodec: const StandardMessageCodec(),
+                    );
+                  case TargetPlatform.fuchsia ||
+                        TargetPlatform.linux ||
+                        TargetPlatform.windows ||
+                        TargetPlatform.macOS:
+                    return Container();
                 }
-              },
-              child: Container(
-                height: double.infinity,
-                width: double.infinity,
-                color: Colors.transparent,
-                child: const Center(child: Text('')),
+              }(),
+
+              // Results
+              () {
+                if (widget.predictor == null) {
+                  return widget.loadingPlaceholder ?? Container();
+                }
+
+                switch (widget.predictor.runtimeType) {
+                  case ObjectDetector:
+                    return StreamBuilder(
+                      stream: (widget.predictor! as ObjectDetector)
+                          .detectionResultStream,
+                      builder: (
+                        BuildContext context,
+                        AsyncSnapshot<List<DetectedObject?>?> snapshot,
+                      ) {
+                        if (snapshot.data == null) return Container();
+
+                        return CustomPaint(
+                          painter: ObjectDetectorPainter(
+                            snapshot.data! as List<DetectedObject>,
+                            widget.boundingBoxesColorList,
+                            widget.controller.value.strokeWidth,
+                          ),
+                        );
+                      },
+                    );
+                  case ImageClassifier:
+                    return widget.classificationOverlay ??
+                        StreamBuilder(
+                          stream: (widget.predictor! as ImageClassifier)
+                              .classificationResultStream,
+                          builder: (context, snapshot) {
+                            final classificationResults = snapshot.data;
+
+                            if (classificationResults == null ||
+                                classificationResults.isEmpty) {
+                              return Container();
+                            }
+
+                            return ClassificationResultOverlay(
+                              classificationResults: classificationResults,
+                            );
+                          },
+                        );
+                  default:
+                    return Container();
+                }
+              }(),
+
+              // Zoom detector
+              GestureDetector(
+                onScaleUpdate: (details) {
+                  if (details.pointerCount == 2) {
+                    // Calculate the new zoom factor
+                    var newZoomFactor = _currentZoomFactor * details.scale;
+
+                    // Adjust the sensitivity for zoom out
+                    if (newZoomFactor < _currentZoomFactor) {
+                      newZoomFactor = _currentZoomFactor -
+                          (_zoomSensitivity *
+                              (_currentZoomFactor - newZoomFactor));
+                    } else {
+                      newZoomFactor = _currentZoomFactor +
+                          (_zoomSensitivity *
+                              (newZoomFactor - _currentZoomFactor));
+                    }
+
+                    // Limit the zoom factor to a range between
+                    // _minZoomLevel and _maxZoomLevel
+                    final clampedZoomFactor =
+                        max(_minZoomLevel, min(_maxZoomLevel, newZoomFactor));
+
+                    // Update the zoom factor
+                    _ultralyticsYoloPlatform.setZoomRatio(clampedZoomFactor);
+
+                    // Update the current zoom factor for the next update
+                    _currentZoomFactor = clampedZoomFactor;
+                  }
+                },
+                child: Container(
+                  height: double.infinity,
+                  width: double.infinity,
+                  color: Colors.transparent,
+                  child: const Center(child: Text('')),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         );
       },
     );
