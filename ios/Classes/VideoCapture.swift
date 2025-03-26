@@ -198,7 +198,13 @@ public class VideoCapture: NSObject {
     }
     
     // Set high quality
-    photoSettings.isHighResolutionPhotoEnabled = true
+    if photoOutput.isHighResolutionCaptureEnabled {
+      photoSettings.isHighResolutionPhotoEnabled = true
+      print("DEBUG: High resolution photo enabled")
+    } else {
+      print("DEBUG: High resolution photo NOT supported by this device")
+    }
+    
     if #available(iOS 13.0, *) {
       // Check maxPhotoQualityPrioritization before setting the value
       let maxPrioritization = photoOutput.maxPhotoQualityPrioritization
