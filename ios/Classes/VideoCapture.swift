@@ -1,6 +1,7 @@
 import AVFoundation
 import CoreVideo
 import UIKit
+import Photos
 
 public protocol VideoCaptureDelegate: AnyObject {
   func videoCapture(_ capture: VideoCapture, didCaptureVideoFrame: CMSampleBuffer)
@@ -178,15 +179,48 @@ public class VideoCapture: NSObject {
       return "Error: Camera not running"
     }
     
-    // Create a unique file path in the temporary directory
+    // Create a unique file path in the Documents directory
     let dateFormatter = DateFormatter()
     dateFormatter.dateFormat = "yyyyMMdd-HHmmss"
     let timestamp = dateFormatter.string(from: Date())
+    
+    // Check if we can record
+    guard movieFileOutput.isRecording == false else {
+      print("DEBUG: Movie file output is already recording")
+      return "Error: Already recording (internal)"
+    }
+    
+    // Check if file outputs are available
+    guard captureSession.outputs.contains(movieFileOutput) else {
+      print("DEBUG: Movie file output is not attached to session")
+      
+      // Try to add it
+      if captureSession.canAddOutput(movieFileOutput) {
+        captureSession.beginConfiguration()
+        captureSession.addOutput(movieFileOutput)
+        captureSession.commitConfiguration()
+        print("DEBUG: Added movie file output")
+      } else {
+        return "Error: Cannot add movie file output to session"
+      }
+    }
     
     // Use the Documents directory instead of temp
     let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
     let documentsDirectory = paths[0]
     let filePath = documentsDirectory.appendingPathComponent("yolo_recording_\(timestamp).mp4")
+    
+    // For testing, let's try to create an empty file to ensure we have write access
+    do {
+      let data = Data()
+      try data.write(to: filePath)
+      print("DEBUG: Successfully created test file at \(filePath.path)")
+      try FileManager.default.removeItem(at: filePath)
+      print("DEBUG: Removed test file")
+    } catch {
+      print("DEBUG: Failed to create test file: \(error.localizedDescription)")
+      return "Error: Cannot write to the specified location: \(error.localizedDescription)"
+    }
     
     recordingFilePath = filePath
     print("DEBUG: Starting recording to \(filePath.path)")
@@ -194,6 +228,16 @@ public class VideoCapture: NSObject {
     // Start recording
     movieFileOutput.startRecording(to: filePath, recordingDelegate: self)
     isRecording = true
+    
+    // Failsafe for delegate not being called
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+      if let self = self, self.isRecording {
+        print("DEBUG: Verifying recording started...")
+        if !self.movieFileOutput.isRecording {
+          print("DEBUG: Warning - movie file output is not recording")
+        }
+      }
+    }
     
     return "Success"
   }
@@ -203,12 +247,21 @@ public class VideoCapture: NSObject {
       return "Error: Not recording"
     }
     
+    // Check if movie file output is actually recording
+    if !movieFileOutput.isRecording {
+      print("DEBUG: Warning - Stop called but movie file output is not recording")
+      isRecording = false
+      return "Error: Not actually recording"
+    }
+    
     print("DEBUG: Stopping recording")
     movieFileOutput.stopRecording()
-    // isRecording will be set to false in the fileOutput delegate method
     
-    // Wait briefly for the recording to finalize
-    usleep(500000) // 0.5 seconds
+    // Wait a bit longer for recording to finalize
+    usleep(1000000) // 1 second
+    
+    // In case the delegate doesn't get called, set isRecording to false
+    isRecording = false
     
     if let path = recordingFilePath?.path {
       // Check if file exists
@@ -225,6 +278,11 @@ public class VideoCapture: NSObject {
           print("DEBUG: Creation date: \(creationDate?.description ?? "unknown")")
           print("DEBUG: Last modified: \(modificationDate?.description ?? "unknown")")
           
+          // Check file size - if too small, file may be corrupted
+          if let size = fileSize?.intValue, size < 1000 {
+            print("DEBUG: Warning - File is very small (\(size) bytes), may be corrupted")
+          }
+          
           // Check if file is readable
           if FileManager.default.isReadableFile(atPath: path) {
             print("DEBUG: File is readable")
@@ -237,42 +295,52 @@ public class VideoCapture: NSObject {
           let firstBytes = fileHandle.readData(ofLength: min(1024, Int(fileSize?.intValue ?? 0)))
           print("DEBUG: Successfully read \(firstBytes.count) bytes from file")
           fileHandle.closeFile()
-        } catch {
-          print("DEBUG: Error getting file attributes: \(error.localizedDescription)")
-        }
-        
-        // Copy to Documents directory
-        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
-        let documentsDirectory = paths[0]
-        let filename = URL(fileURLWithPath: path).lastPathComponent
-        let destPath = documentsDirectory.appendingPathComponent(filename)
-        
-        // Remove any existing file
-        try? FileManager.default.removeItem(at: destPath)
-        
-        do {
-          try FileManager.default.copyItem(atPath: path, toPath: destPath.path)
-          print("DEBUG: Copied file to \(destPath.path)")
           
-          // Verify the copied file
-          if FileManager.default.fileExists(atPath: destPath.path) {
-            let copiedFileSize = (try? FileManager.default.attributesOfItem(atPath: destPath.path)[.size] as? NSNumber)?.int64Value ?? 0
-            print("DEBUG: Copied file exists with size \(copiedFileSize) bytes")
-            return "Success: \(destPath.path)"
-          } else {
-            print("DEBUG: Copied file does not exist at destination")
-            return "Success: \(path)"
-          }
-        } catch {
-          print("DEBUG: Failed to copy file: \(error.localizedDescription)")
+          // Return the direct path since copying failed previously
           return "Success: \(path)"
+        } catch {
+          print("DEBUG: Error accessing file: \(error.localizedDescription)")
+          return "Error: Cannot access recorded file: \(error.localizedDescription)"
         }
       } else {
         print("DEBUG: File does not exist at \(path)")
+        
+        // Check if any files were created in the directory
+        let directoryPath = URL(fileURLWithPath: path).deletingLastPathComponent().path
+        print("DEBUG: Checking directory: \(directoryPath)")
+        
+        do {
+          let contents = try FileManager.default.contentsOfDirectory(atPath: directoryPath)
+          print("DEBUG: Directory contents: \(contents)")
+          
+          // Find any MP4 files created in the last minute
+          let recentMp4s = contents.filter { filename in
+            if !filename.hasSuffix(".mp4") { return false }
+            
+            let fullPath = URL(fileURLWithPath: directoryPath).appendingPathComponent(filename).path
+            if let attributes = try? FileManager.default.attributesOfItem(atPath: fullPath),
+               let creationDate = attributes[.creationDate] as? Date,
+               Date().timeIntervalSince(creationDate) < 60 {
+                print("DEBUG: Found recent MP4: \(filename)")
+                return true
+            }
+            return false
+          }
+          
+          if let latestFile = recentMp4s.first {
+            let fullPath = URL(fileURLWithPath: directoryPath).appendingPathComponent(latestFile).path
+            print("DEBUG: Using latest file: \(fullPath)")
+            return "Success: \(fullPath)"
+          }
+        } catch {
+          print("DEBUG: Error listing directory: \(error.localizedDescription)")
+        }
+        
         return "Error: Recording failed, file not found"
       }
     } else {
-      return "Success"
+      print("DEBUG: No recording file path set")
+      return "Error: No recording file path set"
     }
   }
 
@@ -519,6 +587,25 @@ extension VideoCapture: AVCaptureFileOutputRecordingDelegate {
   public func fileOutput(_ output: AVCaptureFileOutput, didStartRecordingTo fileURL: URL, from connections: [AVCaptureConnection]) {
     print("DEBUG: Recording started to \(fileURL.path)")
     recordingFilePath = fileURL
+    
+    // Check if we can create files in the directory
+    let directoryPath = fileURL.deletingLastPathComponent().path
+    print("DEBUG: Recording directory: \(directoryPath)")
+    
+    // Check directory permissions
+    if FileManager.default.isWritableFile(atPath: directoryPath) {
+      print("DEBUG: Directory is writable")
+    } else {
+      print("DEBUG: Directory is NOT writable!")
+    }
+    
+    // List existing files in the directory
+    do {
+      let contents = try FileManager.default.contentsOfDirectory(atPath: directoryPath)
+      print("DEBUG: Directory contents before recording: \(contents)")
+    } catch {
+      print("DEBUG: Error listing directory: \(error.localizedDescription)")
+    }
   }
   
   public func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo outputFileURL: URL, from connections: [AVCaptureConnection], error: Error?) {
@@ -526,6 +613,24 @@ extension VideoCapture: AVCaptureFileOutputRecordingDelegate {
     
     if let error = error {
       print("DEBUG: Recording error: \(error.localizedDescription)")
+      
+      // Check if any file was created despite the error
+      if FileManager.default.fileExists(atPath: outputFileURL.path) {
+        let fileSize = (try? FileManager.default.attributesOfItem(atPath: outputFileURL.path)[.size] as? NSNumber)?.int64Value ?? 0
+        print("DEBUG: File exists despite error, size: \(fileSize) bytes")
+      } else {
+        print("DEBUG: No file was created due to error")
+      }
+      
+      // List directory contents after error
+      let directoryPath = outputFileURL.deletingLastPathComponent().path
+      do {
+        let contents = try FileManager.default.contentsOfDirectory(atPath: directoryPath)
+        print("DEBUG: Directory contents after error: \(contents)")
+      } catch {
+        print("DEBUG: Error listing directory after recording error: \(error.localizedDescription)")
+      }
+      
       return
     }
     
@@ -533,16 +638,38 @@ extension VideoCapture: AVCaptureFileOutputRecordingDelegate {
     recordingFilePath = outputFileURL
     
     // Verify the file exists before returning
-    if !FileManager.default.fileExists(atPath: outputFileURL.path) {
+    if FileManager.default.fileExists(atPath: outputFileURL.path) {
+      let fileSize = (try? FileManager.default.attributesOfItem(atPath: outputFileURL.path)[.size] as? NSNumber)?.int64Value ?? 0
+      print("DEBUG: File exists with size: \(fileSize) bytes")
+      
+      // List directory contents after successful recording
+      let directoryPath = outputFileURL.deletingLastPathComponent().path
+      do {
+        let contents = try FileManager.default.contentsOfDirectory(atPath: directoryPath)
+        print("DEBUG: Directory contents after recording: \(contents)")
+      } catch {
+        print("DEBUG: Error listing directory: \(error.localizedDescription)")
+      }
+      
+      // Save to camera roll to ensure it's saved somewhere accessible
+      UISaveVideoAtPathToSavedPhotosAlbum(outputFileURL.path, self, #selector(video(_:didFinishSavingWithError:contextInfo:)), nil)
+    } else {
       print("DEBUG: Warning - File does not exist at \(outputFileURL.path)")
+      
+      // List directory contents to see if the file was saved elsewhere
+      let directoryPath = outputFileURL.deletingLastPathComponent().path
+      do {
+        let contents = try FileManager.default.contentsOfDirectory(atPath: directoryPath)
+        print("DEBUG: Directory contents after missing file: \(contents)")
+      } catch {
+        print("DEBUG: Error listing directory: \(error.localizedDescription)")
+      }
+      
       return
     }
     
     // Verify the video file is valid
     verifyVideoFile(at: outputFileURL)
-    
-    // If you want to save to the photo library, you can add that functionality here
-    // UISaveVideoAtPathToSavedPhotosAlbum(outputFileURL.path, self, #selector(video(_:didFinishSavingWithError:contextInfo:)), nil)
   }
   
   private func verifyVideoFile(at url: URL) {
@@ -590,6 +717,25 @@ extension VideoCapture: AVCaptureFileOutputRecordingDelegate {
       print("DEBUG: Error saving video to photo library: \(error.localizedDescription)")
     } else {
       print("DEBUG: Video saved to photo library successfully")
+      
+      // Try to get the most recent video from the photo library
+      let library = PHPhotoLibrary.shared()
+      let fetchOptions = PHFetchOptions()
+      fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+      let fetchResult = PHAsset.fetchAssets(with: .video, options: fetchOptions)
+      
+      if let asset = fetchResult.firstObject {
+        print("DEBUG: Found most recent video in photo library")
+        print("DEBUG: Video duration: \(asset.duration) seconds")
+        print("DEBUG: Video size: \(asset.pixelWidth)x\(asset.pixelHeight)")
+        
+        // Get the file URL from the PHAsset
+        PHImageManager.default().requestAVAsset(forVideo: asset, options: nil) { (avAsset, _, _) in
+          if let urlAsset = avAsset as? AVURLAsset {
+            print("DEBUG: Video URL from library: \(urlAsset.url)")
+          }
+        }
+      }
     }
   }
 }
