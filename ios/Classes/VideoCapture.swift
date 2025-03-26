@@ -253,10 +253,7 @@ public class VideoCapture: NSObject {
       }
       
       let device = input.device
-      guard let format = device.activeFormat.formatDescription else {
-        completion("Error: Could not get format description")
-        return
-      }
+      let format = device.activeFormat.formatDescription
       
       let dimensions = CMVideoFormatDescriptionGetDimensions(format)
       let width = Int(dimensions.width)
