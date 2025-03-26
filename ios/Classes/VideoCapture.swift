@@ -460,7 +460,7 @@ public class VideoCapture: NSObject {
       let videoSettings: [String: Any] = [
         AVVideoCodecKey: AVVideoCodecType.h264,
         AVVideoWidthKey: width,
-        AVVideoHeightKey: height,
+        AVVideoHeightKey: height
       ]
       
       videoWriterInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
@@ -475,9 +475,9 @@ public class VideoCapture: NSObject {
       
       // Set up pixel buffer adaptor
       let sourcePixelBufferAttributes: [String: Any] = [
-        kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
-        kCVPixelBufferWidthKey as String: width,
-        kCVPixelBufferHeightKey as String: height,
+        kCVPixelBufferPixelFormatTypeKey as String: NSNumber(value: kCVPixelFormatType_32BGRA),
+        kCVPixelBufferWidthKey as String: width as NSNumber,
+        kCVPixelBufferHeightKey as String: height as NSNumber
       ]
       
       pixelBufferAdaptor = AVAssetWriterInputPixelBufferAdaptor(
@@ -663,13 +663,13 @@ public class VideoCapture: NSObject {
     }
     
     // If we couldn't get a fallback from the photo library, create a minimal video
-    let videoSettings = [
+    let videoSettings: [String: Any] = [
       AVVideoCodecKey: AVVideoCodecType.h264,
       AVVideoWidthKey: 320,
       AVVideoHeightKey: 240
     ]
     
-    let audioSettings = [
+    let audioSettings: [String: Any] = [
       AVFormatIDKey: kAudioFormatMPEG4AAC,
       AVNumberOfChannelsKey: 1,
       AVSampleRateKey: 44100,
@@ -707,14 +707,14 @@ public class VideoCapture: NSObject {
       
       // Create a blank pixel buffer
       var pixelBuffer: CVPixelBuffer?
-      let pixelBufferAttributes = [
-        kCVPixelBufferCGImageCompatibilityKey: true,
-        kCVPixelBufferCGBitmapContextCompatibilityKey: true,
-        kCVPixelBufferWidthKey: 320,
-        kCVPixelBufferHeightKey: 240
-      ] as CFDictionary
+      let pixelBufferAttributes: [String: Any] = [
+        kCVPixelBufferCGImageCompatibilityKey as String: true as CFBoolean,
+        kCVPixelBufferCGBitmapContextCompatibilityKey as String: true as CFBoolean,
+        kCVPixelBufferWidthKey as String: 320 as CFNumber,
+        kCVPixelBufferHeightKey as String: 240 as CFNumber
+      ]
       
-      CVPixelBufferCreate(kCFAllocatorDefault, 320, 240, kCVPixelFormatType_32ARGB, pixelBufferAttributes, &pixelBuffer)
+      CVPixelBufferCreate(kCFAllocatorDefault, 320, 240, kCVPixelFormatType_32ARGB, pixelBufferAttributes as CFDictionary, &pixelBuffer)
       
       // Fill pixel buffer with black color
       if let pixelBuffer = pixelBuffer {
