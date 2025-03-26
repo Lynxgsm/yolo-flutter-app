@@ -2,8 +2,11 @@ package com.ultralytics.ultralytics_yolo;
 
 import android.app.Activity;
 import android.content.Context;
+import android.graphics.Bitmap;
 import android.util.Size;
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -187,6 +190,35 @@ public class CameraPreview {
         } catch (Exception e) {
             e.printStackTrace();
             return "Error: " + e.getMessage();
+        }
+    }
+
+    public void stopRecording() {
+        if (videoCapture != null) {
+            videoCapture.stopRecording();
+        }
+    }
+
+    public String captureCurrentFrame() {
+        if (imageAnalyzer == null || imageAnalyzer.getCurrentFrame() == null) {
+            throw new IllegalStateException("Camera preview not initialized or no frame available");
+        }
+
+        Bitmap currentFrame = imageAnalyzer.getCurrentFrame();
+        if (currentFrame == null) {
+            throw new IllegalStateException("Failed to get current frame");
+        }
+
+        // Create a file to save the image
+        File imageFile = new File(context.getCacheDir(), "capture_" + System.currentTimeMillis() + ".jpg");
+        try {
+            FileOutputStream out = new FileOutputStream(imageFile);
+            currentFrame.compress(Bitmap.CompressFormat.JPEG, 100, out);
+            out.flush();
+            out.close();
+            return imageFile.getAbsolutePath();
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to save captured frame: " + e.getMessage());
         }
     }
     

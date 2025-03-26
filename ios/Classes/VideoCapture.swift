@@ -184,16 +184,45 @@ public class VideoCapture: NSObject {
     return "Success"
   }
   
-  public func stopRecording() -> String {
-    if !isRecording {
-      return "Error: Not recording"
+  public func stopRecording(completion: @escaping (Bool) -> Void) {
+    if let videoOutput = videoOutput {
+      videoOutput.stopRecording { success in
+        completion(success)
+      }
+    } else {
+      completion(false)
     }
-    
-    print("DEBUG: Stopping recording")
-    movieFileOutput.stopRecording()
-    // isRecording will be set to false in the fileOutput delegate method
-    
-    return "Success"
+  }
+
+  func captureCurrentFrame(completion: @escaping (String?) -> Void) {
+    guard let videoOutput = videoOutput,
+          let currentFrame = videoOutput.currentFrame else {
+      completion(nil)
+      return
+    }
+
+    // Convert the frame to JPEG data
+    guard let imageData = UIImage(cgImage: currentFrame).jpegData(compressionQuality: 1.0) else {
+      completion(nil)
+      return
+    }
+
+    // Create a temporary file path
+    let fileName = "capture_\(Int(Date().timeIntervalSince1970)).jpg"
+    let filePath = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+
+    do {
+      // Write the image data to the file
+      try imageData.write(to: filePath)
+      completion(filePath.path)
+    } catch {
+      print("Failed to save captured frame: \(error)")
+      completion(nil)
+    }
+  }
+
+  func shutdown() {
+    // ... existing code ...
   }
 }
 

@@ -174,4 +174,9 @@ class PlatformChannelUltralyticsYolo implements UltralyticsYoloPlatform {
   Future<String?> stopRecording() => methodChannel
       .invokeMethod<String>('stopRecording')
       .catchError((dynamic e) => e.toString());
+
+  @override
+  Future<String?> getVideoCapture() => methodChannel
+      .invokeMethod<String>('getVideoCapture')
+      .catchError((dynamic e) => e.toString());
 }

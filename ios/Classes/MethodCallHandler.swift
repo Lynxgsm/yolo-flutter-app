@@ -81,6 +81,8 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
       startRecording(args: args, result: result)
     case "stopRecording":
       stopRecording(args: args, result: result)
+    case "getVideoCapture":
+      getVideoCapture(args: args, result: result)
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -247,11 +249,22 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
   }
   
   private func stopRecording(args: [String: Any], result: @escaping FlutterResult) {
-    let response = videoCapture.stopRecording()
-    if response.starts(with: "Error") {
-      result(FlutterError(code: "RECORDING_ERROR", message: response, details: nil))
-    } else {
-      result("Success")
+    videoCapture.stopRecording { success in
+      if success {
+        result("Success")
+      } else {
+        result(FlutterError(code: "RECORDING_ERROR", message: "Failed to stop recording", details: nil))
+      }
+    }
+  }
+
+  private func getVideoCapture(args: [String: Any], result: @escaping FlutterResult) {
+    videoCapture.captureCurrentFrame { imagePath in
+      if let path = imagePath {
+        result(path)
+      } else {
+        result(FlutterError(code: "CAPTURE_ERROR", message: "Failed to capture frame", details: nil))
+      }
     }
   }
 
