@@ -195,34 +195,66 @@ public class VideoCapture: NSObject {
   }
 
   func captureCurrentFrame(completion: @escaping (String?) -> Void) {
-    guard let videoOutput = videoOutput,
-          let currentFrame = videoOutput.currentFrame else {
-      completion(nil)
-      return
-    }
-
-    // Convert the frame to JPEG data
-    guard let imageData = UIImage(cgImage: currentFrame).jpegData(compressionQuality: 1.0) else {
-      completion(nil)
-      return
-    }
-
-    // Create a temporary file path
-    let fileName = "capture_\(Int(Date().timeIntervalSince1970)).jpg"
-    let filePath = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-
-    do {
-      // Write the image data to the file
-      try imageData.write(to: filePath)
-      completion(filePath.path)
-    } catch {
-      print("Failed to save captured frame: \(error)")
-      completion(nil)
-    }
+    // Create a photo settings object
+    let settings = AVCapturePhotoSettings()
+    
+    // Create a handler for the photo capture
+    photoOutput.capturePhoto(with: settings, delegate: CapturePhotoDelegate(completion: { image in
+      guard let image = image else {
+        completion(nil)
+        return
+      }
+      
+      // Create a temporary file path
+      let fileName = "capture_\(Int(Date().timeIntervalSince1970)).jpg"
+      let filePath = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+      
+      // Convert the image to JPEG data
+      guard let imageData = image.jpegData(compressionQuality: 1.0) else {
+        completion(nil)
+        return
+      }
+      
+      do {
+        // Write the image data to the file
+        try imageData.write(to: filePath)
+        completion(filePath.path)
+      } catch {
+        print("Failed to save captured frame: \(error)")
+        completion(nil)
+      }
+    }))
   }
 
   func shutdown() {
     // ... existing code ...
+  }
+}
+
+// Custom delegate to handle the photo capture
+class CapturePhotoDelegate: NSObject, AVCapturePhotoCaptureDelegate {
+  private let completion: (UIImage?) -> Void
+  
+  init(completion: @escaping (UIImage?) -> Void) {
+    self.completion = completion
+    super.init()
+  }
+  
+  func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
+    if let error = error {
+      print("Error capturing photo: \(error)")
+      completion(nil)
+      return
+    }
+    
+    guard let imageData = photo.fileDataRepresentation(),
+          let image = UIImage(data: imageData) else {
+      print("Error converting photo data to UIImage")
+      completion(nil)
+      return
+    }
+    
+    completion(image)
   }
 }
 
