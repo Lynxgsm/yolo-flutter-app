@@ -168,8 +168,9 @@ public class CameraPreview {
             // Temporarily unbind and rebind with image capture
             cameraProvider.unbindAll();
             
+            // Use the same camera facing as the current preview
             CameraSelector cameraSelector = new CameraSelector.Builder()
-                    .requireLensFacing(mPreviewView.getDisplay().getDisplayId())
+                    .requireLensFacing(CameraSelector.LENS_FACING_BACK)  // Default to back camera
                     .build();
                     
             // Rebind with image capture
@@ -197,7 +198,7 @@ public class CameraPreview {
                             
                             // Restore camera setup
                             cameraProvider.unbindAll();
-                            bindPreview(mPreviewView.getDisplay().getDisplayId());
+                            bindPreview(CameraSelector.LENS_FACING_BACK);  // Restore with back camera
                             
                             // Return the bytes
                             callback.onPictureTaken(bytes);
@@ -207,7 +208,7 @@ public class CameraPreview {
                         public void onError(@NonNull androidx.camera.core.ImageCaptureException exception) {
                             // Restore camera setup on error
                             cameraProvider.unbindAll();
-                            bindPreview(mPreviewView.getDisplay().getDisplayId());
+                            bindPreview(CameraSelector.LENS_FACING_BACK);  // Restore with back camera
                             
                             callback.onError(exception.getMessage());
                         }
