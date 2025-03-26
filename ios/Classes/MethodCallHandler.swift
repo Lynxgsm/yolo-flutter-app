@@ -254,6 +254,14 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
     let response = videoCapture.stopRecording()
     if response.starts(with: "Error") {
       result(FlutterError(code: "RECORDING_ERROR", message: response, details: nil))
+    } else if response.starts(with: "Success: ") {
+      // Extract the path and verify it exists
+      let path = String(response.dropFirst("Success: ".count))
+      if FileManager.default.fileExists(atPath: path) {
+        result(response)
+      } else {
+        result(FlutterError(code: "RECORDING_ERROR", message: "File not found at path: \(path)", details: nil))
+      }
     } else {
       result(response)
     }
@@ -276,6 +284,14 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
     videoCapture.stopSavingVideo { response in
       if response.starts(with: "Error") {
         result(FlutterError(code: "SAVE_VIDEO_ERROR", message: response, details: nil))
+      } else if response.starts(with: "Success: ") {
+        // Extract the path and verify it exists
+        let path = String(response.dropFirst("Success: ".count))
+        if FileManager.default.fileExists(atPath: path) {
+          result(response)
+        } else {
+          result(FlutterError(code: "SAVE_VIDEO_ERROR", message: "File not found at path: \(path)", details: nil))
+        }
       } else {
         result(response)
       }

@@ -205,7 +205,24 @@ public class VideoCapture: NSObject {
     // isRecording will be set to false in the fileOutput delegate method
     
     if let path = recordingFilePath?.path {
-      return "Success: \(path)"
+      // Wait briefly to ensure file is finalized
+      var fileExists = false
+      // Check up to 5 times with a small delay
+      for _ in 0..<5 {
+        if FileManager.default.fileExists(atPath: path) {
+          fileExists = true
+          break
+        }
+        // Microsecond sleep
+        usleep(100000) // 0.1 second
+      }
+      
+      if fileExists {
+        return "Success: \(path)"
+      } else {
+        print("DEBUG: Warning - File not found at \(path) after waiting")
+        return "Error: File was not created properly"
+      }
     } else {
       return "Success"
     }
@@ -322,6 +339,9 @@ public class VideoCapture: NSObject {
     // Finalize writing
     videoWriterInput?.markAsFinished()
     
+    // Prepare the saved path for later use
+    let savedPath = savedVideoPath?.path
+    
     videoWriter?.finishWriting { [weak self] in
       guard let self = self else { return }
       
@@ -331,9 +351,26 @@ public class VideoCapture: NSObject {
         return
       }
       
-      if let savedPath = self.savedVideoPath?.path {
-        print("DEBUG: Successfully saved video to \(savedPath)")
-        completion("Success: \(savedPath)")
+      if let path = savedPath {
+        // Wait briefly to ensure file is finalized
+        var fileExists = false
+        // Check up to 5 times with a small delay
+        for _ in 0..<5 {
+          if FileManager.default.fileExists(atPath: path) {
+            fileExists = true
+            break
+          }
+          // Microsecond sleep
+          usleep(100000) // 0.1 second
+        }
+        
+        if fileExists {
+          print("DEBUG: Successfully saved video to \(path)")
+          completion("Success: \(path)")
+        } else {
+          print("DEBUG: Warning - File not found at \(path) after waiting")
+          completion("Error: File was not created properly")
+        }
       } else {
         completion("Success: Video saved")
       }
@@ -444,6 +481,11 @@ extension VideoCapture: AVCaptureFileOutputRecordingDelegate {
     
     print("DEBUG: Recording finished successfully to \(outputFileURL.path)")
     recordingFilePath = outputFileURL
+    
+    // Verify the file exists before returning
+    if !FileManager.default.fileExists(atPath: outputFileURL.path) {
+      print("DEBUG: Warning - File does not exist at \(outputFileURL.path)")
+    }
     
     // If you want to save to the photo library, you can add that functionality here
     // UISaveVideoAtPathToSavedPhotosAlbum(outputFileURL.path, self, #selector(video(_:didFinishSavingWithError:contextInfo:)), nil)

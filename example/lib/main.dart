@@ -116,107 +116,161 @@ class _MyAppState extends State<MyApp> {
         floatingActionButton: Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            FloatingActionButton(
-              heroTag: "saveVideo",
-              child: const Icon(Icons.videocam),
-              onPressed: () async {
-                try {
-                  // Start recording using the standard recording API
-                  final result = await controller.startRecording();
-
-                  // Show toast or message to indicate recording started
-                  ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Recording started')));
-
-                  // Schedule recording to stop after 5 seconds for demo purposes
-                  Future.delayed(const Duration(seconds: 5), () async {
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FloatingActionButton(
+                  heroTag: "saveVideo",
+                  child: const Icon(Icons.video_camera_back),
+                  onPressed: () async {
                     try {
-                      final stopResult = await controller.stopRecording();
-                      String message = 'Video saved successfully';
+                      // Start recording using the standard recording API
+                      final result = await controller.startRecording();
 
-                      // Extract the path from the result string if present
-                      if (stopResult != null &&
-                          stopResult.startsWith('Success: ')) {
-                        final videoPath =
-                            stopResult.substring('Success: '.length);
-                        message = 'Video saved at: $videoPath';
+                      // Show toast or message to indicate recording started
+                      ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Recording started')));
+
+                      // Schedule recording to stop after 5 seconds for demo purposes
+                      Future.delayed(const Duration(seconds: 5), () async {
+                        try {
+                          final stopResult = await controller.stopRecording();
+                          String message = 'Video saved successfully';
+
+                          // Extract the path from the result string if present
+                          if (stopResult != null &&
+                              stopResult.startsWith('Success: ')) {
+                            final videoPath =
+                                stopResult.substring('Success: '.length);
+                            message = 'Video saved at: $videoPath';
+
+                            // Verify the file exists
+                            try {
+                              final file = io.File(videoPath);
+                              if (await file.exists()) {
+                                final size = await file.length();
+                                message =
+                                    'Video saved at: $videoPath (${(size / 1024).toStringAsFixed(1)} KB)';
+                              } else {
+                                message =
+                                    'File path returned but file not found: $videoPath';
+                              }
+                            } catch (e) {
+                              print('Error checking file: $e');
+                            }
+                          }
+
+                          ScaffoldMessenger.of(context)
+                              .showSnackBar(SnackBar(content: Text(message)));
+                        } catch (e) {
+                          print('Error stopping recording: $e');
+                          ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Error stopping: $e')));
+                        }
+                      });
+                    } catch (e) {
+                      print('Error starting recording: $e');
+                      ScaffoldMessenger.of(context)
+                          .showSnackBar(SnackBar(content: Text('Error: $e')));
+                    }
+                  },
+                ),
+                const SizedBox(height: 8),
+                const Text('Record', style: TextStyle(color: Colors.white)),
+              ],
+            ),
+            const SizedBox(width: 16),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FloatingActionButton(
+                  heroTag: "stopSaveVideo",
+                  child: const Icon(Icons.video_collection),
+                  onPressed: () async {
+                    try {
+                      // Get the directory for saving the video
+                      final directory =
+                          await getApplicationDocumentsDirectory();
+                      final path = '${directory.path}/frame_capture_video.mp4';
+
+                      // Start saving video frames
+                      final result = await controller.saveVideo(path: path);
+
+                      // Show toast or message to indicate frame capture started
+                      String message = 'Started frame capture';
+                      if (result != null && result.startsWith('Success: ')) {
+                        final videoPath = result.substring('Success: '.length);
+                        message =
+                            'Frame capture started, will save to: $videoPath';
                       }
 
                       ScaffoldMessenger.of(context)
                           .showSnackBar(SnackBar(content: Text(message)));
+
+                      // Schedule frame capture to stop after 5 seconds for demo purposes
+                      Future.delayed(const Duration(seconds: 5), () async {
+                        try {
+                          final stopResult = await controller.stopSavingVideo();
+                          String stopMessage = 'Frame capture completed';
+
+                          // Extract the path from the result string if present
+                          if (stopResult != null &&
+                              stopResult.startsWith('Success: ')) {
+                            final videoPath =
+                                stopResult.substring('Success: '.length);
+                            stopMessage =
+                                'Frame capture video saved at: $videoPath';
+
+                            // Verify the file exists
+                            try {
+                              final file = io.File(videoPath);
+                              if (await file.exists()) {
+                                final size = await file.length();
+                                stopMessage =
+                                    'Frame video saved at: $videoPath (${(size / 1024).toStringAsFixed(1)} KB)';
+                              } else {
+                                stopMessage =
+                                    'File path returned but file not found: $videoPath';
+                              }
+                            } catch (e) {
+                              print('Error checking frame capture file: $e');
+                            }
+                          }
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(stopMessage)));
+                        } catch (e) {
+                          print('Error stopping frame capture: $e');
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                              content:
+                                  Text('Error stopping frame capture: $e')));
+                        }
+                      });
                     } catch (e) {
-                      print('Error stopping recording: $e');
-                      ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Error stopping: $e')));
-                    }
-                  });
-                } catch (e) {
-                  print('Error starting recording: $e');
-                  ScaffoldMessenger.of(context)
-                      .showSnackBar(SnackBar(content: Text('Error: $e')));
-                }
-              },
-            ),
-            const SizedBox(width: 16),
-            FloatingActionButton(
-              heroTag: "stopSaveVideo",
-              child: const Icon(Icons.stop),
-              onPressed: () async {
-                try {
-                  // Get the directory for saving the video
-                  final directory = await getApplicationDocumentsDirectory();
-                  final path = '${directory.path}/frame_capture_video.mp4';
-
-                  // Start saving video frames
-                  final result = await controller.saveVideo(path: path);
-
-                  // Show toast or message to indicate frame capture started
-                  String message = 'Started frame capture';
-                  if (result != null && result.startsWith('Success: ')) {
-                    final videoPath = result.substring('Success: '.length);
-                    message = 'Frame capture started, will save to: $videoPath';
-                  }
-
-                  ScaffoldMessenger.of(context)
-                      .showSnackBar(SnackBar(content: Text(message)));
-
-                  // Schedule frame capture to stop after 5 seconds for demo purposes
-                  Future.delayed(const Duration(seconds: 5), () async {
-                    try {
-                      final stopResult = await controller.stopSavingVideo();
-                      String stopMessage = 'Frame capture completed';
-
-                      // Extract the path from the result string if present
-                      if (stopResult != null &&
-                          stopResult.startsWith('Success: ')) {
-                        final videoPath =
-                            stopResult.substring('Success: '.length);
-                        stopMessage =
-                            'Frame capture video saved at: $videoPath';
-                      }
-
+                      print('Error starting frame capture: $e');
                       ScaffoldMessenger.of(context)
-                          .showSnackBar(SnackBar(content: Text(stopMessage)));
-                    } catch (e) {
-                      print('Error stopping frame capture: $e');
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                          content: Text('Error stopping frame capture: $e')));
+                          .showSnackBar(SnackBar(content: Text('Error: $e')));
                     }
-                  });
-                } catch (e) {
-                  print('Error starting frame capture: $e');
-                  ScaffoldMessenger.of(context)
-                      .showSnackBar(SnackBar(content: Text('Error: $e')));
-                }
-              },
+                  },
+                ),
+                const SizedBox(height: 8),
+                const Text('Frames', style: TextStyle(color: Colors.white)),
+              ],
             ),
             const SizedBox(width: 16),
-            FloatingActionButton(
-              heroTag: "switchCamera",
-              child: const Icon(Icons.cameraswitch),
-              onPressed: () {
-                controller.toggleLensDirection();
-              },
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FloatingActionButton(
+                  heroTag: "switchCamera",
+                  child: const Icon(Icons.cameraswitch),
+                  onPressed: () {
+                    controller.toggleLensDirection();
+                  },
+                ),
+                const SizedBox(height: 8),
+                const Text('Switch', style: TextStyle(color: Colors.white)),
+              ],
             ),
           ],
         ),
