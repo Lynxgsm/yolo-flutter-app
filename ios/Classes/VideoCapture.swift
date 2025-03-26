@@ -203,6 +203,9 @@ public class VideoCapture: NSObject {
       } else {
         return "Error: Cannot add movie file output to session"
       }
+      
+      // Add a return statement here to exit the guard block properly
+      return "Success: Movie file output added"
     }
     
     // Use the Documents directory instead of temp
