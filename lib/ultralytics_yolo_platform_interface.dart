@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:ultralytics_yolo/predict/classify/classification_result.dart';
 import 'package:ultralytics_yolo/predict/detect/detected_object.dart';
@@ -127,5 +129,10 @@ abstract class UltralyticsYoloPlatform extends PlatformInterface {
   /// Stop saving camera frames and finalize the video file
   Future<String?> stopSavingVideo() {
     throw UnimplementedError('stopSavingVideo has not been implemented.');
+  }
+
+  /// Take a picture as bytes
+  Future<Uint8List?> takePictureAsBytes() {
+    throw UnimplementedError('takePictureAsBytes has not been implemented.');
   }
 }

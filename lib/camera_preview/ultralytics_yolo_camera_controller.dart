@@ -75,26 +75,24 @@ class UltralyticsYoloCameraController
   }
 
   // Start recording
-  Future<String?> startRecording() async {
+  Future<void> startRecording() async {
     try {
       final result = await _ultralyticsYoloPlatform.startRecording();
       if (result != 'Success') {
         throw Exception('Failed to start recording: $result');
       }
-      return result;
     } catch (e) {
       rethrow;
     }
   }
 
   // Stop recording
-  Future<String?> stopRecording() async {
+  Future<void> stopRecording() async {
     try {
       final result = await _ultralyticsYoloPlatform.stopRecording();
-      if (result == null || !result.startsWith('Success')) {
+      if (result != 'Success') {
         throw Exception('Failed to stop recording: $result');
       }
-      return result;
     } catch (e) {
       rethrow;
     }
@@ -125,6 +123,36 @@ class UltralyticsYoloCameraController
       return await _ultralyticsYoloPlatform.stopSavingVideo();
     } catch (e) {
       rethrow;
+    }
+  }
+
+  Future<Uint8List?> takePictureAsBytes() async {
+    try {
+      if (kDebugMode) {
+        print('Starting to take picture...');
+      }
+
+      final result = await _ultralyticsYoloPlatform.takePictureAsBytes();
+
+      if (result == null) {
+        if (kDebugMode) {
+          print('Picture taking failed - returned null');
+        }
+        return null;
+      }
+
+      if (kDebugMode) {
+        print(
+          'Picture taken successfully, size: ${result.lengthInBytes} bytes',
+        );
+      }
+
+      return result;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error taking picture: $e');
+      }
+      return null;
     }
   }
 }

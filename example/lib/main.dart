@@ -135,7 +135,9 @@ class _MyAppState extends State<MyApp> {
                       // Schedule recording to stop after 5 seconds for demo purposes
                       Future.delayed(const Duration(seconds: 5), () async {
                         try {
-                          final stopResult = await controller.stopRecording();
+                          final stopResult = await predictor
+                              .ultralyticsYoloPlatform
+                              .stopRecording();
                           String message = 'Recording stopped';
 
                           // Extract the path from the result string if present
