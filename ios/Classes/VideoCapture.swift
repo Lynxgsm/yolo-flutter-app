@@ -535,10 +535,53 @@ extension VideoCapture: AVCaptureFileOutputRecordingDelegate {
     // Verify the file exists before returning
     if !FileManager.default.fileExists(atPath: outputFileURL.path) {
       print("DEBUG: Warning - File does not exist at \(outputFileURL.path)")
+      return
     }
+    
+    // Verify the video file is valid
+    verifyVideoFile(at: outputFileURL)
     
     // If you want to save to the photo library, you can add that functionality here
     // UISaveVideoAtPathToSavedPhotosAlbum(outputFileURL.path, self, #selector(video(_:didFinishSavingWithError:contextInfo:)), nil)
+  }
+  
+  private func verifyVideoFile(at url: URL) {
+    let asset = AVAsset(url: url)
+    
+    // Check if the file has video tracks
+    let videoTracks = asset.tracks(withMediaType: .video)
+    print("DEBUG: Video file has \(videoTracks.count) video tracks")
+    
+    // Get video track details if available
+    if let videoTrack = videoTracks.first {
+      print("DEBUG: Video size: \(videoTrack.naturalSize)")
+      print("DEBUG: Video duration: \(asset.duration.seconds) seconds")
+      print("DEBUG: Video format: \(videoTrack.formatDescriptions)")
+    }
+    
+    // Check if file is readable using AVAssetReader
+    do {
+      let assetReader = try AVAssetReader(asset: asset)
+      print("DEBUG: Asset reader created successfully")
+      
+      if let videoTrack = videoTracks.first {
+        let readerOutput = AVAssetReaderTrackOutput(track: videoTrack, outputSettings: nil)
+        if assetReader.canAdd(readerOutput) {
+          assetReader.add(readerOutput)
+        }
+        
+        assetReader.startReading()
+        if let sampleBuffer = readerOutput.copyNextSampleBuffer() {
+          print("DEBUG: Successfully read first sample buffer from video")
+          CMSampleBufferInvalidate(sampleBuffer)
+        } else {
+          print("DEBUG: Failed to read first sample buffer")
+        }
+        assetReader.cancelReading()
+      }
+    } catch {
+      print("DEBUG: Failed to create asset reader: \(error.localizedDescription)")
+    }
   }
   
   // Optional callback for saving to the photo library

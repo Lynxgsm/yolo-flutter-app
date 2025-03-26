@@ -1,4 +1,5 @@
 import 'dart:io' as io;
+import 'dart:math' show min;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -158,15 +159,54 @@ class _MyAppState extends State<MyApp> {
                                 print('Directory contents:');
                                 directory.listSync().forEach((entity) {
                                   print(' - ${entity.path}');
+                                  if (entity is io.File) {
+                                    try {
+                                      final fileSize = entity.lengthSync();
+                                      final lastModified =
+                                          entity.lastModifiedSync();
+                                      print('   Size: $fileSize bytes');
+                                      print('   Last modified: $lastModified');
+                                      print(
+                                          '   Can read: ${entity.existsSync()}');
+                                    } catch (e) {
+                                      print('   Error getting file info: $e');
+                                    }
+                                  }
                                 });
                               }
 
                               // Check if file exists and get size
                               if (await file.exists()) {
-                                final size = await file.length();
-                                message =
-                                    'Video saved at: $videoPath (${(size / 1024).toStringAsFixed(1)} KB)';
-                                print('File exists with size: $size bytes');
+                                try {
+                                  final size = await file.length();
+                                  final lastModified =
+                                      await file.lastModified();
+                                  final stat = await file.stat();
+
+                                  print('File exists with size: $size bytes');
+                                  print('Last modified: $lastModified');
+                                  print('File stats: $stat');
+
+                                  message =
+                                      'Video saved at: $videoPath (${(size / 1024).toStringAsFixed(1)} KB)';
+
+                                  // Try to read the first few bytes to check if file is accessible
+                                  try {
+                                    final randomAccessFile =
+                                        await file.open(mode: io.FileMode.read);
+                                    final bytes = await randomAccessFile
+                                        .read(min(1024, size.toInt()));
+                                    await randomAccessFile.close();
+                                    print(
+                                        'Successfully read ${bytes.length} bytes from file');
+                                  } catch (e) {
+                                    print('Error reading file content: $e');
+                                  }
+                                } catch (e) {
+                                  print('Error getting file details: $e');
+                                  message =
+                                      'File exists but error getting details: $e';
+                                }
                               } else {
                                 message =
                                     'File path returned but file not found: $videoPath';
@@ -253,24 +293,64 @@ class _MyAppState extends State<MyApp> {
                                 print('Directory contents:');
                                 directory.listSync().forEach((entity) {
                                   print(' - ${entity.path}');
+                                  if (entity is io.File) {
+                                    try {
+                                      final fileSize = entity.lengthSync();
+                                      final lastModified =
+                                          entity.lastModifiedSync();
+                                      print('   Size: $fileSize bytes');
+                                      print('   Last modified: $lastModified');
+                                      print(
+                                          '   Can read: ${entity.existsSync()}');
+                                    } catch (e) {
+                                      print('   Error getting file info: $e');
+                                    }
+                                  }
                                 });
                               }
 
                               // Check if file exists and get size
                               if (await file.exists()) {
-                                final size = await file.length();
-                                stopMessage =
-                                    'Frame video saved at: $videoPath (${(size / 1024).toStringAsFixed(1)} KB)';
-                                print(
-                                    'Frame capture file exists with size: $size bytes');
+                                try {
+                                  final size = await file.length();
+                                  final lastModified =
+                                      await file.lastModified();
+                                  final stat = await file.stat();
+
+                                  print(
+                                      'Frame file exists with size: $size bytes');
+                                  print('Last modified: $lastModified');
+                                  print('File stats: $stat');
+
+                                  stopMessage =
+                                      'Frame video saved at: $videoPath (${(size / 1024).toStringAsFixed(1)} KB)';
+
+                                  // Try to read the first few bytes to check if file is accessible
+                                  try {
+                                    final randomAccessFile =
+                                        await file.open(mode: io.FileMode.read);
+                                    final bytes = await randomAccessFile
+                                        .read(min(1024, size.toInt()));
+                                    await randomAccessFile.close();
+                                    print(
+                                        'Successfully read ${bytes.length} bytes from frame file');
+                                  } catch (e) {
+                                    print(
+                                        'Error reading frame file content: $e');
+                                  }
+                                } catch (e) {
+                                  print('Error getting frame file details: $e');
+                                  stopMessage =
+                                      'Frame file exists but error getting details: $e';
+                                }
                               } else {
                                 stopMessage =
-                                    'File path returned but file not found: $videoPath';
+                                    'File path returned but frame file not found: $videoPath';
                                 print(
-                                    'Frame capture file does not exist at: $videoPath');
+                                    'Frame file does not exist at: $videoPath');
                               }
                             } catch (e) {
-                              print('Error checking frame capture file: $e');
+                              print('Error checking frame file: $e');
                             }
                           }
 
