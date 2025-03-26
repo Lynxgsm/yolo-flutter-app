@@ -135,7 +135,7 @@ class _MyAppState extends State<MyApp> {
                       Future.delayed(const Duration(seconds: 5), () async {
                         try {
                           final stopResult = await controller.stopRecording();
-                          String message = 'Video saved successfully';
+                          String message = 'Recording stopped';
 
                           // Extract the path from the result string if present
                           if (stopResult != null &&
@@ -144,16 +144,33 @@ class _MyAppState extends State<MyApp> {
                                 stopResult.substring('Success: '.length);
                             message = 'Video saved at: $videoPath';
 
-                            // Verify the file exists
+                            // Verify the file exists with extended debugging
                             try {
                               final file = io.File(videoPath);
+                              print('Checking file at path: $videoPath');
+
+                              final directory = io.Directory(
+                                  io.Directory(videoPath).parent.path);
+                              print(
+                                  'Directory exists: ${directory.existsSync()}');
+
+                              if (directory.existsSync()) {
+                                print('Directory contents:');
+                                directory.listSync().forEach((entity) {
+                                  print(' - ${entity.path}');
+                                });
+                              }
+
+                              // Check if file exists and get size
                               if (await file.exists()) {
                                 final size = await file.length();
                                 message =
                                     'Video saved at: $videoPath (${(size / 1024).toStringAsFixed(1)} KB)';
+                                print('File exists with size: $size bytes');
                               } else {
                                 message =
                                     'File path returned but file not found: $videoPath';
+                                print('File does not exist at: $videoPath');
                               }
                             } catch (e) {
                               print('Error checking file: $e');
@@ -221,16 +238,36 @@ class _MyAppState extends State<MyApp> {
                             stopMessage =
                                 'Frame capture video saved at: $videoPath';
 
-                            // Verify the file exists
+                            // Verify the file exists with extended debugging
                             try {
                               final file = io.File(videoPath);
+                              print(
+                                  'Checking frame capture file at path: $videoPath');
+
+                              final directory = io.Directory(
+                                  io.Directory(videoPath).parent.path);
+                              print(
+                                  'Directory exists: ${directory.existsSync()}');
+
+                              if (directory.existsSync()) {
+                                print('Directory contents:');
+                                directory.listSync().forEach((entity) {
+                                  print(' - ${entity.path}');
+                                });
+                              }
+
+                              // Check if file exists and get size
                               if (await file.exists()) {
                                 final size = await file.length();
                                 stopMessage =
                                     'Frame video saved at: $videoPath (${(size / 1024).toStringAsFixed(1)} KB)';
+                                print(
+                                    'Frame capture file exists with size: $size bytes');
                               } else {
                                 stopMessage =
                                     'File path returned but file not found: $videoPath';
+                                print(
+                                    'Frame capture file does not exist at: $videoPath');
                               }
                             } catch (e) {
                               print('Error checking frame capture file: $e');

@@ -182,8 +182,11 @@ public class VideoCapture: NSObject {
     let dateFormatter = DateFormatter()
     dateFormatter.dateFormat = "yyyyMMdd-HHmmss"
     let timestamp = dateFormatter.string(from: Date())
-    let tempDirectory = NSTemporaryDirectory()
-    let filePath = URL(fileURLWithPath: tempDirectory).appendingPathComponent("yolo_recording_\(timestamp).mp4")
+    
+    // Use the Documents directory instead of temp
+    let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+    let documentsDirectory = paths[0]
+    let filePath = documentsDirectory.appendingPathComponent("yolo_recording_\(timestamp).mp4")
     
     recordingFilePath = filePath
     print("DEBUG: Starting recording to \(filePath.path)")
@@ -204,24 +207,69 @@ public class VideoCapture: NSObject {
     movieFileOutput.stopRecording()
     // isRecording will be set to false in the fileOutput delegate method
     
+    // Wait briefly for the recording to finalize
+    usleep(500000) // 0.5 seconds
+    
     if let path = recordingFilePath?.path {
-      // Wait briefly to ensure file is finalized
-      var fileExists = false
-      // Check up to 5 times with a small delay
-      for _ in 0..<5 {
-        if FileManager.default.fileExists(atPath: path) {
-          fileExists = true
-          break
+      // Check if file exists
+      if FileManager.default.fileExists(atPath: path) {
+        // Get file size and attributes
+        do {
+          let fileAttributes = try FileManager.default.attributesOfItem(atPath: path)
+          let fileSize = fileAttributes[.size] as? NSNumber
+          let creationDate = fileAttributes[.creationDate] as? Date
+          let modificationDate = fileAttributes[.modificationDate] as? Date
+          
+          print("DEBUG: File exists at \(path)")
+          print("DEBUG: File size: \(fileSize?.intValue ?? 0) bytes")
+          print("DEBUG: Creation date: \(creationDate?.description ?? "unknown")")
+          print("DEBUG: Last modified: \(modificationDate?.description ?? "unknown")")
+          
+          // Check if file is readable
+          if FileManager.default.isReadableFile(atPath: path) {
+            print("DEBUG: File is readable")
+          } else {
+            print("DEBUG: File is NOT readable")
+          }
+          
+          // Try to read a small portion to verify file integrity
+          let fileHandle = try FileHandle(forReadingFrom: URL(fileURLWithPath: path))
+          let firstBytes = fileHandle.readData(ofLength: min(1024, Int(fileSize?.intValue ?? 0)))
+          print("DEBUG: Successfully read \(firstBytes.count) bytes from file")
+          fileHandle.closeFile()
+        } catch {
+          print("DEBUG: Error getting file attributes: \(error.localizedDescription)")
         }
-        // Microsecond sleep
-        usleep(100000) // 0.1 second
-      }
-      
-      if fileExists {
-        return "Success: \(path)"
+        
+        // Copy to Documents directory
+        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+        let documentsDirectory = paths[0]
+        let filename = URL(fileURLWithPath: path).lastPathComponent
+        let destPath = documentsDirectory.appendingPathComponent(filename)
+        
+        // Remove any existing file
+        try? FileManager.default.removeItem(at: destPath)
+        
+        do {
+          try FileManager.default.copyItem(atPath: path, toPath: destPath.path)
+          print("DEBUG: Copied file to \(destPath.path)")
+          
+          // Verify the copied file
+          if FileManager.default.fileExists(atPath: destPath.path) {
+            let copiedFileSize = (try? FileManager.default.attributesOfItem(atPath: destPath.path)[.size] as? NSNumber)?.int64Value ?? 0
+            print("DEBUG: Copied file exists with size \(copiedFileSize) bytes")
+            return "Success: \(destPath.path)"
+          } else {
+            print("DEBUG: Copied file does not exist at destination")
+            return "Success: \(path)"
+          }
+        } catch {
+          print("DEBUG: Failed to copy file: \(error.localizedDescription)")
+          return "Success: \(path)"
+        }
       } else {
-        print("DEBUG: Warning - File not found at \(path) after waiting")
-        return "Error: File was not created properly"
+        print("DEBUG: File does not exist at \(path)")
+        return "Error: Recording failed, file not found"
       }
     } else {
       return "Success"
@@ -241,7 +289,7 @@ public class VideoCapture: NSObject {
       return
     }
     
-    // Create a unique file path if not provided
+    // Create a unique file path in the Documents directory
     let videoPath: URL
     if let path = customPath {
       videoPath = URL(fileURLWithPath: path)
@@ -249,8 +297,10 @@ public class VideoCapture: NSObject {
       let dateFormatter = DateFormatter()
       dateFormatter.dateFormat = "yyyyMMdd-HHmmss"
       let timestamp = dateFormatter.string(from: Date())
-      let tempDirectory = NSTemporaryDirectory()
-      videoPath = URL(fileURLWithPath: tempDirectory).appendingPathComponent("yolo_video_\(timestamp).mp4")
+      
+      let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+      let documentsDirectory = paths[0]
+      videoPath = documentsDirectory.appendingPathComponent("yolo_frames_\(timestamp).mp4")
     }
     
     savedVideoPath = videoPath
