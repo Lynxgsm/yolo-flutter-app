@@ -37,7 +37,7 @@ public class VideoCapture: NSObject {
   public var lastCapturedPhoto: UIImage?
   public weak var nativeView: FLNativeView?
   // For picture capture
-  private var bytesPhotoCaptureDelegate: BytesPhotoCaptureDelegate?
+  private var bytesPhotoCaptureDelegate: VideoCapture.BytesPhotoCaptureDelegate?
   // For video capture
   private var isRecording = false
   private var isCapturingFrames = false
@@ -204,7 +204,7 @@ public class VideoCapture: NSObject {
     }
     
     // Create a delegate to handle the photo capture and retain it as a property
-    bytesPhotoCaptureDelegate = BytesPhotoCaptureDelegate { [weak self] (imageData, error) in
+    bytesPhotoCaptureDelegate = VideoCapture.BytesPhotoCaptureDelegate { [weak self] (imageData, error) in
       // Release the delegate after completion
       defer { self?.bytesPhotoCaptureDelegate = nil }
       completion(imageData, error)
