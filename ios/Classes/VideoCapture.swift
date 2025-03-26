@@ -197,21 +197,13 @@ public class VideoCapture: NSObject {
   }
 
   func captureCurrentFrame(completion: @escaping (String?) -> Void) {
-    guard let previewLayer = self.previewLayer else {
-      completion(nil)
-      return
-    }
+    // Create a photo settings object
+    let settings = AVCapturePhotoSettings()
     
-    // Directly capture what's shown in the preview layer
-    UIGraphicsBeginImageContextWithOptions(previewLayer.bounds.size, false, UIScreen.main.scale)
-    
-    if let context = UIGraphicsGetCurrentContext() {
-      previewLayer.render(in: context)
-      let previewImage = UIGraphicsGetImageFromCurrentImageContext()
-      UIGraphicsEndImageContext()
-      
-      guard let capturedImage = previewImage else {
-        print("Failed to capture preview layer")
+    // Create and retain the delegate
+    let delegate = CapturePhotoDelegate(completion: { [weak self] image in
+      guard let image = image else {
+        print("Failed to capture photo")
         completion(nil)
         return
       }
@@ -221,7 +213,7 @@ public class VideoCapture: NSObject {
       let filePath = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
       
       // Convert the image to JPEG data
-      guard let imageData = capturedImage.jpegData(compressionQuality: 1.0) else {
+      guard let imageData = image.jpegData(compressionQuality: 1.0) else {
         completion(nil)
         return
       }
@@ -235,10 +227,16 @@ public class VideoCapture: NSObject {
         print("Failed to save captured frame: \(error)")
         completion(nil)
       }
-    } else {
-      print("Failed to get graphics context")
-      completion(nil)
-    }
+      
+      // Release the delegate after completion
+      self?.currentCaptureDelegate = nil
+    })
+    
+    // Store the delegate to keep it alive during the capture process
+    self.currentCaptureDelegate = delegate
+    
+    // Start the photo capture
+    photoOutput.capturePhoto(with: settings, delegate: delegate)
   }
 
   func shutdown() {

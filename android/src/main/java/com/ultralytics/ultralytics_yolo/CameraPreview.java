@@ -204,24 +204,15 @@ public class CameraPreview {
     }
 
     public String captureCurrentFrame() {
-        if (mPreviewView == null) {
-            throw new IllegalStateException("Camera preview not initialized");
-        }
-        
-        // Create bitmap from the preview view directly
-        mPreviewView.setDrawingCacheEnabled(true);
-        Bitmap previewBitmap = Bitmap.createBitmap(mPreviewView.getDrawingCache());
-        mPreviewView.setDrawingCacheEnabled(false);
-        
-        if (previewBitmap == null) {
-            throw new IllegalStateException("Failed to capture preview frame");
+        if (latestFrame == null) {
+            throw new IllegalStateException("Camera preview not initialized or no frame available");
         }
 
         // Create a file to save the image
         File imageFile = new File(context.getCacheDir(), "capture_" + System.currentTimeMillis() + ".jpg");
         try {
             FileOutputStream out = new FileOutputStream(imageFile);
-            previewBitmap.compress(Bitmap.CompressFormat.JPEG, 100, out);
+            latestFrame.compress(Bitmap.CompressFormat.JPEG, 100, out);
             out.flush();
             out.close();
             return imageFile.getAbsolutePath();
