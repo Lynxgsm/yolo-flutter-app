@@ -2,9 +2,6 @@
 //  MethodChannelCallHandler.swift
 //  ultralytics_yolo
 //
-//  Created by Sergio Sánchez on 9/11/23.
-//  Updated by Lynxgsm on 26/03/25.
-//
 
 import AVFoundation
 import Flutter
