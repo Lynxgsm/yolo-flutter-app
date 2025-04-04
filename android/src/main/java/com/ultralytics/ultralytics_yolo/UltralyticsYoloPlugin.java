@@ -11,12 +11,16 @@ import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding;
 import io.flutter.plugin.common.BinaryMessenger;
 import io.flutter.plugin.common.MethodChannel;
 
+import com.ultralytics.ultralytics_yolo.predict.Predictor;
+
 /**
  * UltralyticsYoloPlugin
  */
 public class UltralyticsYoloPlugin implements FlutterPlugin, ActivityAware {
     private FlutterPluginBinding flutterPluginBinding;
     private CameraPreview cameraPreview;
+    private MethodCallHandler methodCallHandler;
+    private MethodChannel methodChannel;
 
     @Override
     public void onAttachedToEngine(@NonNull FlutterPluginBinding binding) {
@@ -27,19 +31,36 @@ public class UltralyticsYoloPlugin implements FlutterPlugin, ActivityAware {
 
         cameraPreview = new CameraPreview(context);
 
-        MethodCallHandler methodCallHandler = new MethodCallHandler(
+        methodCallHandler = new MethodCallHandler(
                 binaryMessenger,
                 context, cameraPreview);
-        new MethodChannel(binaryMessenger, "ultralytics_yolo")
-                .setMethodCallHandler(methodCallHandler);
+        methodChannel = new MethodChannel(binaryMessenger, "ultralytics_yolo");
+        methodChannel.setMethodCallHandler(methodCallHandler);
     }
 
     @Override
     public void onDetachedFromEngine(@NonNull FlutterPluginBinding binding) {
-        // Call shutdown to ensure recording properly stops if active
+        // Clean up resources
+        if (methodChannel != null) {
+            methodChannel.setMethodCallHandler(null);
+            methodChannel = null;
+        }
+        
+        if (methodCallHandler != null) {
+            methodCallHandler.dispose();
+            methodCallHandler = null;
+        }
+        
+        // Shutdown camera preview
         if (cameraPreview != null) {
             cameraPreview.shutdown();
+            cameraPreview = null;
         }
+        
+        // Shutdown predictor thread pools
+        Predictor.shutdownExecutors();
+        
+        android.util.Log.d("UltralyticsYoloPlugin", "All resources cleaned up");
         flutterPluginBinding = null;
     }
 
@@ -54,7 +75,7 @@ public class UltralyticsYoloPlugin implements FlutterPlugin, ActivityAware {
 
     @Override
     public void onDetachedFromActivityForConfigChanges() {
-
+        // No resources to clean up specifically for config changes
     }
 
     @Override
@@ -64,6 +85,6 @@ public class UltralyticsYoloPlugin implements FlutterPlugin, ActivityAware {
 
     @Override
     public void onDetachedFromActivity() {
-
+        // Clean up any activity-specific resources if needed
     }
 }

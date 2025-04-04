@@ -63,6 +63,9 @@ public class CameraPreview {
     private Recording currentRecording;
     private ExecutorService cameraExecutor;
 
+    // Add a dedicated executor for image analysis to avoid blocking the main thread
+    private final ExecutorService analyzerExecutor = Executors.newSingleThreadExecutor();
+
     public CameraPreview(Context context) {
         this.context = context;
         cameraExecutor = Executors.newSingleThreadExecutor();
@@ -100,12 +103,20 @@ public class CameraPreview {
                     new ImageAnalysis.Builder()
                             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                             .setTargetAspectRatio(AspectRatio.RATIO_4_3)
+                            .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888) // Explicitly set format
+                            .setTargetResolution(CAMERA_PREVIEW_SIZE) // Set target resolution
                             .build();
-            imageAnalysis.setAnalyzer(Runnable::run, imageProxy -> {
-                predictor.predict(imageProxy, facing == CameraSelector.LENS_FACING_FRONT);
-
-                //clear stream for next image
-                imageProxy.close();
+            
+            // Use dedicated executor instead of Runnable::run for better performance
+            imageAnalysis.setAnalyzer(analyzerExecutor, imageProxy -> {
+                try {
+                    predictor.predict(imageProxy, facing == CameraSelector.LENS_FACING_FRONT);
+                } catch (Exception e) {
+                    android.util.Log.e("CameraPreview", "Error in image analysis: " + e.getMessage());
+                } finally {
+                    // Always close the imageProxy to avoid resource leaks
+                    imageProxy.close();
+                }
             });
             
             // Set up image capture
@@ -280,7 +291,7 @@ public class CameraPreview {
         // Convert to JPEG bytes
         byte[] jpegBytes;
         if (mediaImage.getFormat() == ImageFormat.YUV_420_888) {
-            jpegBytes = yuv420ToJpeg(mediaImage);
+            jpegBytes = yuv420ToJpeg(mediaImage, 90); // Lower quality for better performance
         } else {
             // Try standard approach if it's not YUV format
             ByteBuffer buffer = image.getPlanes()[0].getBuffer();
@@ -289,22 +300,26 @@ public class CameraPreview {
             jpegBytes = bytes;
         }
         
+        // Configure decoding options to improve performance
+        BitmapFactory.Options options = new BitmapFactory.Options();
+        options.inPreferredConfig = Bitmap.Config.RGB_565; // Use RGB_565 instead of ARGB_8888 for better performance
+        
         // Convert bytes to bitmap
-        return BitmapFactory.decodeByteArray(jpegBytes, 0, jpegBytes.length);
+        return BitmapFactory.decodeByteArray(jpegBytes, 0, jpegBytes.length, options);
     }
     
     // Convert Image to JPEG bytes
     private byte[] imageToJpegBytes(Image image) {
         if (image.getFormat() == ImageFormat.YUV_420_888) {
-            return yuv420ToJpeg(image);
+            return yuv420ToJpeg(image, 90);
         } else {
             android.util.Log.e("CameraPreview", "Unsupported image format: " + image.getFormat());
             return new byte[0];
         }
     }
     
-    // Convert YUV_420_888 to JPEG
-    private byte[] yuv420ToJpeg(Image image) {
+    // Optimize YUV_420_888 to JPEG conversion with quality parameter
+    private byte[] yuv420ToJpeg(Image image, int quality) {
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         
         // Get image planes
@@ -337,10 +352,10 @@ public class CameraPreview {
                 null
         );
         
-        // Compress to JPEG
+        // Compress to JPEG with specified quality
         yuvImage.compressToJpeg(
                 new Rect(0, 0, image.getWidth(), image.getHeight()),
-                100, // Quality (0-100)
+                quality, // Use specified quality parameter instead of fixed 100
                 outputStream
         );
         
@@ -384,23 +399,77 @@ public class CameraPreview {
             // Set up recording options
             FileOutputOptions fileOutputOptions = new FileOutputOptions.Builder(outputFile).build();
             
-            // Start recording
-            currentRecording = videoCapture.getOutput().prepareRecording(context, fileOutputOptions)
-                    .start(ContextCompat.getMainExecutor(context), videoRecordEvent -> {
-                        if (videoRecordEvent instanceof VideoRecordEvent.Finalize) {
-                            VideoRecordEvent.Finalize finalizeEvent = (VideoRecordEvent.Finalize) videoRecordEvent;
-                            if (!finalizeEvent.hasError()) {
-                                // Recording saved successfully
-                                android.util.Log.d("CameraPreview", "Recording saved successfully to " + outputFile.getAbsolutePath());
-                            } else {
-                                // Handle recording error
-                                android.util.Log.e("CameraPreview", "Recording error: " + finalizeEvent.getError());
+            try {
+                // Start recording with file output
+                currentRecording = videoCapture.getOutput().prepareRecording(context, fileOutputOptions)
+                        .start(ContextCompat.getMainExecutor(context), videoRecordEvent -> {
+                            if (videoRecordEvent instanceof VideoRecordEvent.Finalize) {
+                                VideoRecordEvent.Finalize finalizeEvent = (VideoRecordEvent.Finalize) videoRecordEvent;
+                                if (!finalizeEvent.hasError()) {
+                                    // Recording saved successfully
+                                    android.util.Log.d("CameraPreview", "Recording saved successfully to " + outputFile.getAbsolutePath());
+                                } else {
+                                    // Handle recording error
+                                    android.util.Log.e("CameraPreview", "Recording error: " + finalizeEvent.getError());
+                                }
                             }
+                        });
+                
+                android.util.Log.d("CameraPreview", "Started recording to " + outputFile.getAbsolutePath());
+                return "Success";
+            } catch (Exception e) {
+                android.util.Log.e("CameraPreview", "Standard recording approach failed: " + e.getMessage());
+                
+                // Try fallback approach for Android 15 if the standard approach fails
+                try {
+                    // For Android 15, we might need to use MediaStore approach instead of direct file
+                    if (android.os.Build.VERSION.SDK_INT >= 33) {
+                        android.util.Log.d("CameraPreview", "Trying MediaStore approach for Android 13+");
+                        
+                        // Create MediaStore options with ContentValues
+                        String name = "yolo_recording_" + timestamp;
+                        android.content.ContentValues contentValues = new android.content.ContentValues();
+                        contentValues.put(android.provider.MediaStore.Video.Media.DISPLAY_NAME, name);
+                        contentValues.put(android.provider.MediaStore.Video.Media.MIME_TYPE, "video/mp4");
+                        // For Android 10 and above, we can add the relative path
+                        if (android.os.Build.VERSION.SDK_INT >= 29) {
+                            contentValues.put(android.provider.MediaStore.Video.Media.RELATIVE_PATH, 
+                                            "Movies/YoloRecordings");
                         }
-                    });
-            
-            android.util.Log.d("CameraPreview", "Started recording to " + outputFile.getAbsolutePath());
-            return "Success";
+                        
+                        MediaStoreOutputOptions mediaStoreOutputOptions = new MediaStoreOutputOptions.Builder(
+                                context.getContentResolver(),
+                                android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI)
+                                .setContentValues(contentValues)
+                                .build();
+                        
+                        currentRecording = videoCapture.getOutput()
+                                .prepareRecording(context, mediaStoreOutputOptions)
+                                .withAudioEnabled()
+                                .start(ContextCompat.getMainExecutor(context), videoRecordEvent -> {
+                                    if (videoRecordEvent instanceof VideoRecordEvent.Start) {
+                                        android.util.Log.d("CameraPreview", "Recording started (MediaStore)");
+                                    } else if (videoRecordEvent instanceof VideoRecordEvent.Finalize) {
+                                        VideoRecordEvent.Finalize finalizeEvent = (VideoRecordEvent.Finalize) videoRecordEvent;
+                                        if (!finalizeEvent.hasError()) {
+                                            android.util.Log.d("CameraPreview", "Recording saved successfully (MediaStore) to " + 
+                                                            finalizeEvent.getOutputResults().getOutputUri());
+                                        } else {
+                                            android.util.Log.e("CameraPreview", "Recording error (MediaStore): " + 
+                                                            finalizeEvent.getError());
+                                        }
+                                    }
+                                });
+                        return "Success";
+                    }
+                } catch (Exception ex) {
+                    android.util.Log.e("CameraPreview", "MediaStore approach also failed: " + ex.getMessage());
+                    ex.printStackTrace();
+                }
+                
+                e.printStackTrace();
+                throw e;
+            }
         } catch (Exception e) {
             e.printStackTrace();
             android.util.Log.e("CameraPreview", "Error starting recording: " + e.getMessage());
@@ -429,6 +498,8 @@ public class CameraPreview {
             currentRecording = null;
         }
         
+        // Shutdown both executors
         cameraExecutor.shutdown();
+        analyzerExecutor.shutdown();
     }
 }

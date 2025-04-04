@@ -41,6 +41,8 @@ public class TfliteDetector extends Detector {
 
     private static final long FPS_INTERVAL_MS = 1000; // Update FPS every 1000 milliseconds (1 second)
     private static final int NUM_BYTES_PER_CHANNEL = 4;
+    private static final int FRAME_SKIP = 2; // Process every Nth frame to reduce load
+    private int frameCounter = 0; // Counter for frame skipping
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Matrix transformationMatrix;
     private final Bitmap pendingBitmapFrame;
@@ -181,9 +183,21 @@ public class TfliteDetector extends Detector {
             return;
         }
 
+        // Skip frames to improve performance
+        frameCounter++;
+        if (frameCounter % FRAME_SKIP != 0) {
+            return;
+        }
+
         Bitmap bitmap = ImageUtils.toBitmap(imageProxy);
+        if (bitmap == null) {
+            return;
+        }
+
+        // Reuse existing bitmap to reduce garbage collection
         Canvas canvas = new Canvas(pendingBitmapFrame);
-        
+        pendingBitmapFrame.eraseColor(0); // Clear bitmap before drawing
+
         // Calculate transformation based on orientation and mirroring
         transformationMatrix.reset();
         
@@ -211,6 +225,11 @@ public class TfliteDetector extends Detector {
         transformationMatrix.postTranslate(dx, dy);
         
         canvas.drawBitmap(bitmap, transformationMatrix, null);
+        
+        // Recycle the bitmap to free memory immediately
+        if (!bitmap.isRecycled()) {
+            bitmap.recycle();
+        }
 
         handler.post(() -> {
             setInput(pendingBitmapFrame);
@@ -243,64 +262,60 @@ public class TfliteDetector extends Detector {
                 lastFpsTime = end;
                 frameCount = 0;
 
-                // Log or display the FPS
+                // Log FPS
+                android.util.Log.d("TfliteDetector", "FPS: " + fps);
+                
+                // Send FPS to callback
                 fpsRateCallback.onResult(fps);
             }
 
-            objectDetectionResultCallback.onResult(result);
+            // Send inference time to callback
             inferenceTimeCallback.onResult(end - start);
+            
+            // Send detection results to callback
+            objectDetectionResultCallback.onResult(result);
         });
     }
 
     private void setInput(Bitmap resizedbitmap) {
-        ByteBuffer imgData = ByteBuffer.allocateDirect(1 * INPUT_SIZE * INPUT_SIZE * 3 * NUM_BYTES_PER_CHANNEL);
+        if (inputArray == null) {
+            inputArray = new Object[1];
+            inputArray[0] = ByteBuffer.allocateDirect(1 * INPUT_SIZE * INPUT_SIZE * 3 * NUM_BYTES_PER_CHANNEL);
+            ((ByteBuffer) inputArray[0]).order(ByteOrder.nativeOrder());
+        }
+        
+        ByteBuffer inputBuffer = (ByteBuffer) inputArray[0];
+        inputBuffer.rewind();
+        
         int[] intValues = new int[INPUT_SIZE * INPUT_SIZE];
-
-        resizedbitmap.getPixels(intValues, 0, resizedbitmap.getWidth(), 0, 0, resizedbitmap.getWidth(), resizedbitmap.getHeight());
-
-        imgData.order(ByteOrder.nativeOrder());
-        imgData.rewind();
+        resizedbitmap.getPixels(intValues, 0, resizedbitmap.getWidth(), 0, 0, 
+                               resizedbitmap.getWidth(), resizedbitmap.getHeight());
+        
+        int pixel = 0;
         for (int i = 0; i < INPUT_SIZE; ++i) {
             for (int j = 0; j < INPUT_SIZE; ++j) {
-                int pixelValue = intValues[i * INPUT_SIZE + j];
-                float r = (((pixelValue >> 16) & 0xFF)) / 255.0f;
-                float g = (((pixelValue >> 8) & 0xFF)) / 255.0f;
-                float b = ((pixelValue & 0xFF)) / 255.0f;
-                imgData.putFloat(r);
-                imgData.putFloat(g);
-                imgData.putFloat(b);
+                final int val = intValues[pixel++];
+                // Normalize pixel values to [-1,1]
+                inputBuffer.putFloat(((val >> 16) & 0xFF) / 127.5f - 1.0f);
+                inputBuffer.putFloat(((val >> 8) & 0xFF) / 127.5f - 1.0f);
+                inputBuffer.putFloat((val & 0xFF) / 127.5f - 1.0f);
             }
         }
-        this.inputArray = new Object[]{imgData};
-        this.outputMap = new HashMap<>();
-        ByteBuffer outData = ByteBuffer.allocateDirect(outputShape2 * outputShape3 * NUM_BYTES_PER_CHANNEL);
-        outData.order(ByteOrder.nativeOrder());
-        outData.rewind();
-        outputMap.put(0, outData);
     }
 
     private float[][] runInference() {
-        if (interpreter != null) {
-            interpreter.runForMultipleInputsOutputs(inputArray, outputMap);
-
-            ByteBuffer byteBuffer = (ByteBuffer) outputMap.get(0);
-            if (byteBuffer != null) {
-                byteBuffer.rewind();
-
-                for (int j = 0; j < outputShape2; ++j) {
-                    for (int k = 0; k < outputShape3; ++k) {
-                        output[j][k] = byteBuffer.getFloat();
-                    }
-                }
-
-                return postprocess(output, outputShape3, outputShape2, (float) confidenceThreshold,
-                        (float) iouThreshold, numItemsThreshold, numClasses);
-            }
+        if (outputMap == null) {
+            outputMap = new HashMap<>();
+            outputMap.put(0, output);
         }
-        return new float[0][];
+        
+        // Run inference
+        interpreter.runForMultipleInputsOutputs(inputArray, outputMap);
+        
+        // Postprocess the output
+        return postprocess(output, 640, 640, confidenceThreshold, iouThreshold, numItemsThreshold);
     }
 
-    private native float[][] postprocess(float[][] recognitions, int w, int h,
-                                         float confidenceThreshold, float iouThreshold,
-                                         int numItemsThreshold, int numClasses);
+    private native float[][] postprocess(float[][] recognitions, int w, int h, 
+                                        double confidence_threshold, double iou_threshold, int num_items_threshold);
 }

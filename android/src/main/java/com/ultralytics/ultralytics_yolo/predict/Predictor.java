@@ -18,11 +18,17 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 public abstract class Predictor {
-public static  int INPUT_SIZE = 320;
-        protected final Context context;
+    public static  int INPUT_SIZE = 320;
+    protected final Context context;
     public final ArrayList<String> labels = new ArrayList<>();
+
+    // Create a thread pool for handling inference operations
+    protected static final ExecutorService inferenceExecutor = Executors.newFixedThreadPool(2);
 
     static {
         System.loadLibrary("ultralytics");
@@ -72,6 +78,24 @@ public static  int INPUT_SIZE = 320;
     public abstract void setInferenceTimeCallback(FloatResultCallback callback);
 
     public abstract void setFpsRateCallback(FloatResultCallback callback);
+
+    // Method to release resources when predictor is no longer needed
+    public void close() {
+        // Subclasses should override this method to release their resources
+    }
+
+    // Method to shut down the executor service when the app is being closed
+    public static void shutdownExecutors() {
+        inferenceExecutor.shutdown();
+        try {
+            // Wait for existing tasks to terminate
+            if (!inferenceExecutor.awaitTermination(800, TimeUnit.MILLISECONDS)) {
+                inferenceExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            inferenceExecutor.shutdownNow();
+        }
+    }
 
     public interface FloatResultCallback {
         @Keep()

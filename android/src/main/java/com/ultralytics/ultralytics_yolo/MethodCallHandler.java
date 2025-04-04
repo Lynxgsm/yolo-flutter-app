@@ -420,4 +420,28 @@ public class MethodCallHandler implements MethodChannel.MethodCallHandler {
             }
         });
     }
+
+    // Add method to clean up resources when the plugin is being destroyed
+    public void dispose() {
+        // Clean up stream handlers
+        if (resultStreamHandler != null) {
+            resultStreamHandler.onCancel(null);
+        }
+        
+        if (inferenceTimeStreamHandler != null) {
+            inferenceTimeStreamHandler.onCancel(null);
+        }
+        
+        if (fpsRateStreamHandler != null) {
+            fpsRateStreamHandler.onCancel(null);
+        }
+        
+        // Close the predictor to release resources
+        if (predictor != null) {
+            predictor.close();
+            predictor = null;
+        }
+        
+        android.util.Log.d("MethodCallHandler", "Resources disposed");
+    }
 }

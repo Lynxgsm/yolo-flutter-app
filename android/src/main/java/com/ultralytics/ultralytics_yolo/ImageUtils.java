@@ -6,15 +6,89 @@ import android.graphics.ImageFormat;
 import android.graphics.Matrix;
 import android.graphics.Rect;
 import android.graphics.YuvImage;
+import android.media.Image;
 import androidx.camera.core.ImageProxy;
 import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 
 public class ImageUtils {
     public static Bitmap toBitmap(ImageProxy imageProxy) {
-        byte[] nv21 = yuv420888ToNv21(imageProxy);
-        YuvImage yuvImage = new YuvImage(nv21, ImageFormat.NV21, imageProxy.getWidth(), imageProxy.getHeight(), null);
-        return yuvImageToBitmap(yuvImage);
+        Image image = imageProxy.getImage();
+        if (image == null) return null;
+
+        int previewWidth = imageProxy.getWidth();
+        int previewHeight = imageProxy.getHeight();
+
+        if (image.getFormat() == ImageFormat.YUV_420_888) {
+            YuvImage yuvImage = yuv420888ToYuvImage(image, previewWidth, previewHeight);
+            if (yuvImage != null) {
+                // Use a lower quality to improve performance (90 instead of 100)
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                yuvImage.compressToJpeg(new Rect(0, 0, previewWidth, previewHeight), 90, out);
+                
+                byte[] imageBytes = out.toByteArray();
+                
+                // Use RGB_565 to reduce memory usage
+                BitmapFactory.Options options = new BitmapFactory.Options();
+                options.inPreferredConfig = Bitmap.Config.RGB_565;
+                // Allow the decoder to use a bitmap whose pixels can be modified by the system
+                options.inMutable = true;
+                
+                return BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.length, options);
+            }
+        }
+        
+        return null;
+    }
+
+    /**
+     * Efficiently convert an Image in YUV_420_888 format to YuvImage
+     */
+    private static YuvImage yuv420888ToYuvImage(Image image, int width, int height) {
+        try {
+            // Get image planes
+            Image.Plane[] planes = image.getPlanes();
+            if (planes.length < 3) return null;
+            
+            // We know that YUV_420_888 has 3 planes: Y, U, and V
+            ByteBuffer yBuffer = planes[0].getBuffer();
+            ByteBuffer uBuffer = planes[1].getBuffer();
+            ByteBuffer vBuffer = planes[2].getBuffer();
+            
+            int ySize = yBuffer.remaining();
+            int uSize = uBuffer.remaining();
+            int vSize = vBuffer.remaining();
+            
+            byte[] nv21 = new byte[ySize + uSize + vSize];
+            
+            // Copy Y plane
+            yBuffer.get(nv21, 0, ySize);
+            
+            // Copy U and V planes in NV21 format (interleaved)
+            int uvPos = ySize;
+            // Get strides for efficient conversion
+            int yStride = planes[0].getRowStride();
+            int uStride = planes[1].getRowStride();
+            int vStride = planes[2].getRowStride();
+            int uPixelStride = planes[1].getPixelStride();
+            int vPixelStride = planes[2].getPixelStride();
+            
+            // Efficient interleaved UV copying
+            int uvHeight = height / 2;
+            int uvWidth = width / 2;
+            for (int row = 0; row < uvHeight; row++) {
+                for (int col = 0; col < uvWidth; col++) {
+                    int vuPos = col * uPixelStride + row * uStride;
+                    nv21[uvPos++] = vBuffer.get(vuPos);
+                    nv21[uvPos++] = uBuffer.get(vuPos);
+                }
+            }
+            
+            return new YuvImage(nv21, ImageFormat.NV21, width, height, null);
+        } catch (Exception e) {
+            android.util.Log.e("ImageUtils", "Error converting YUV to YuvImage: " + e.getMessage());
+            return null;
+        }
     }
 
     /**
