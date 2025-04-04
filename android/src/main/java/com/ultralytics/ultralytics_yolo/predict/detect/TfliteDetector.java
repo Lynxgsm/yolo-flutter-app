@@ -180,6 +180,12 @@ public class TfliteDetector extends Detector {
         if (interpreter == null || imageProxy == null) {
             return;
         }
+        
+        // Skip frames during recording to improve performance
+        if (!shouldProcessFrame()) {
+            imageProxy.close();
+            return;
+        }
 
         Bitmap bitmap = ImageUtils.toBitmap(imageProxy);
         Canvas canvas = new Canvas(pendingBitmapFrame);

@@ -47,6 +47,7 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.ultralytics.ultralytics_yolo.predict.Predictor;
 
 import java.util.concurrent.ExecutionException;
+import java.util.Arrays;
 
 
 public class CameraPreview {
@@ -62,6 +63,7 @@ public class CameraPreview {
     private ImageCapture imageCapture;
     private Recording currentRecording;
     private ExecutorService cameraExecutor;
+    private boolean isRecording = false;
 
     public CameraPreview(Context context) {
         this.context = context;
@@ -116,7 +118,7 @@ public class CameraPreview {
 
             // Set up video capture
             Recorder recorder = new Recorder.Builder()
-                    .setQualitySelector(QualitySelector.from(Quality.HIGHEST))
+                    .setQualitySelector(QualitySelector.from(Quality.HD))
                     .build();
             videoCapture = VideoCapture.withOutput(recorder);
 
@@ -378,11 +380,20 @@ public class CameraPreview {
                 outputDir.mkdirs();
             }
             
+            // Clean up old recordings to prevent storage issues
+            cleanupOldRecordings(outputDir);
+            
             String timestamp = new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new Date());
             File outputFile = new File(outputDir, "yolo_recording_" + timestamp + ".mp4");
             
             // Set up recording options
             FileOutputOptions fileOutputOptions = new FileOutputOptions.Builder(outputFile).build();
+            
+            // Signal that recording is starting
+            isRecording = true;
+            if (predictor != null) {
+                predictor.setRecordingMode(true);
+            }
             
             // Start recording
             currentRecording = videoCapture.getOutput().prepareRecording(context, fileOutputOptions)
@@ -408,6 +419,28 @@ public class CameraPreview {
         }
     }
     
+    // Helper method to clean up old recordings to avoid filling up storage
+    private void cleanupOldRecordings(File directory) {
+        try {
+            File[] files = directory.listFiles();
+            if (files == null || files.length <= 5) { // Keep at most 5 recent recordings
+                return;
+            }
+            
+            // Sort files by last modified time (oldest first)
+            Arrays.sort(files, (f1, f2) -> Long.compare(f1.lastModified(), f2.lastModified()));
+            
+            // Delete older files, keeping the 5 most recent
+            for (int i = 0; i < files.length - 5; i++) {
+                if (files[i].delete()) {
+                    android.util.Log.d("CameraPreview", "Deleted old recording: " + files[i].getName());
+                }
+            }
+        } catch (Exception e) {
+            android.util.Log.e("CameraPreview", "Error cleaning up old recordings: " + e.getMessage());
+        }
+    }
+    
     public String stopRecording() {
         if (currentRecording == null) {
             return "Error: No active recording";
@@ -416,6 +449,11 @@ public class CameraPreview {
         try {
             currentRecording.stop();
             currentRecording = null;
+            // Signal that recording has stopped
+            isRecording = false;
+            if (predictor != null) {
+                predictor.setRecordingMode(false);
+            }
             return "Success";
         } catch (Exception e) {
             e.printStackTrace();

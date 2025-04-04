@@ -23,6 +23,9 @@ public abstract class Predictor {
 public static  int INPUT_SIZE = 320;
         protected final Context context;
     public final ArrayList<String> labels = new ArrayList<>();
+    protected boolean isRecordingMode = false;
+    private static final int RECORDING_FRAME_SKIP = 3; // Process 1 out of 3 frames during recording
+    private int frameSkipCounter = 0;
 
     static {
         System.loadLibrary("ultralytics");
@@ -72,6 +75,28 @@ public static  int INPUT_SIZE = 320;
     public abstract void setInferenceTimeCallback(FloatResultCallback callback);
 
     public abstract void setFpsRateCallback(FloatResultCallback callback);
+    
+    /**
+     * Set recording mode to optimize performance during video recording
+     * @param isRecording whether recording is active
+     */
+    public void setRecordingMode(boolean isRecording) {
+        this.isRecordingMode = isRecording;
+        frameSkipCounter = 0;
+    }
+    
+    /**
+     * Check if the current frame should be processed based on recording mode
+     * @return true if the frame should be processed, false if it should be skipped
+     */
+    protected boolean shouldProcessFrame() {
+        if (!isRecordingMode) {
+            return true;
+        }
+        
+        frameSkipCounter = (frameSkipCounter + 1) % RECORDING_FRAME_SKIP;
+        return frameSkipCounter == 0;
+    }
 
     public interface FloatResultCallback {
         @Keep()
