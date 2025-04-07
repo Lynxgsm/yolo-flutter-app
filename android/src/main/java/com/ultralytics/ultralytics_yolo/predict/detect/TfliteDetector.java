@@ -259,18 +259,42 @@ public class TfliteDetector extends Detector {
             // Set processing flag to avoid processing multiple frames simultaneously 
             isProcessing = true;
             
+            // Get the dimensions of the imageProxy for correct coordinate mapping
+            final int imageWidth = imageProxy.getWidth();
+            final int imageHeight = imageProxy.getHeight();
+            
+            // Get device orientation more reliably
+            final int deviceOrientation = context.getResources().getConfiguration().orientation;
+            final boolean isPortrait = (deviceOrientation == android.content.res.Configuration.ORIENTATION_PORTRAIT);
+            
+            // Log dimensions and orientation for debugging
+            Log.d(TAG, "Image dimensions: " + imageWidth + "x" + imageHeight);
+            Log.d(TAG, "Device orientation: " + (isPortrait ? "Portrait" : "Landscape"));
+            Log.d(TAG, "Model input size: " + INPUT_SIZE + "x" + INPUT_SIZE);
+            
             Bitmap bitmap = ImageUtils.toBitmap(imageProxy);
             
             // We're done with the image proxy, release it
             imageProxy.close();
             
+            if (bitmap == null) {
+                isProcessing = false;
+                return;
+            }
+            
+            // Store original bitmap dimensions for debugging
+            final int origBitmapWidth = bitmap.getWidth();
+            final int origBitmapHeight = bitmap.getHeight();
+            Log.d(TAG, "Bitmap dimensions: " + origBitmapWidth + "x" + origBitmapHeight);
+            
             Canvas canvas = new Canvas(pendingBitmapFrame);
+            pendingBitmapFrame.eraseColor(0); // Clear bitmap before drawing
             
             // Calculate transformation based on orientation and mirroring
             transformationMatrix.reset();
             
-            // Handle rotation based on image rotation
-            float rotation = 90; // Default rotation for portrait mode
+            // Set rotation based on device orientation - critical for correct detection coordinates
+            float rotation = isPortrait ? 90 : 0;
             float centerX = INPUT_SIZE / 2f;
             float centerY = INPUT_SIZE / 2f;
             
@@ -281,7 +305,7 @@ public class TfliteDetector extends Detector {
                 transformationMatrix.postScale(-1, 1, centerX, centerY);
             }
             
-            // Scale the image to fit INPUT_SIZE
+            // Scale the image to fit INPUT_SIZE maintaining aspect ratio
             float scaleX = (float) INPUT_SIZE / bitmap.getWidth();
             float scaleY = (float) INPUT_SIZE / bitmap.getHeight();
             float scale = Math.max(scaleX, scaleY);
@@ -293,6 +317,16 @@ public class TfliteDetector extends Detector {
             transformationMatrix.postTranslate(dx, dy);
             
             canvas.drawBitmap(bitmap, transformationMatrix, null);
+            
+            // Log transformation details
+            Log.d(TAG, String.format("Transform: rotation=%.1f, scale=%.2f, dx=%.1f, dy=%.1f, mirrored=%b, portrait=%b", 
+                  rotation, scale, dx, dy, isMirrored, isPortrait));
+            
+            // Store values needed for coordinate correction
+            final boolean finalIsMirrored = isMirrored;
+            final int finalImageWidth = imageWidth;
+            final int finalImageHeight = imageHeight;
+            final boolean finalIsPortrait = isPortrait;
             
             // Recycle bitmap to free memory immediately
             bitmap.recycle();
@@ -308,15 +342,25 @@ public class TfliteDetector extends Detector {
                     float[][] result = runInference();
                     long end = System.currentTimeMillis();
                     
-                    // If front camera, flip the x coordinates of the bounding boxes
-                    if (isMirrored) {
-                        for (float[] detection : result) {
-                            if (detection != null && detection.length >= 4) {
-                                // Flip x coordinate
-                                detection[0] = 1.0f - detection[0];
+                    // Log raw results for debugging
+                    if (result != null && result.length > 0) {
+                        Log.d(TAG, "Raw detection count: " + result.length);
+                        for (int i = 0; i < Math.min(result.length, 3); i++) { // Log first 3 detections
+                            if (result[i] != null && result[i].length >= 6) {
+                                Log.d(TAG, String.format("Raw detection %d: x=%.3f, y=%.3f, w=%.3f, h=%.3f, conf=%.2f, class=%d",
+                                      i, result[i][0], result[i][1], result[i][2], result[i][3], result[i][4], (int)result[i][5]));
                             }
                         }
                     }
+                    
+                    // Adjust detection coordinates to match the display correctly
+                    result = ImageUtils.adjustDetectionCoordinates(
+                        result, 
+                        finalIsMirrored,
+                        INPUT_SIZE,
+                        finalImageWidth, 
+                        finalImageHeight
+                    );
                     
                     // Increment frame count
                     frameCount++;
