@@ -2,8 +2,13 @@ package com.ultralytics.ultralytics_yolo;
 
 import android.app.Activity;
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.Matrix;
+import android.graphics.Rect;
 import android.util.Size;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -15,6 +20,9 @@ import androidx.camera.core.Camera;
 import androidx.camera.core.CameraControl;
 import androidx.camera.core.CameraSelector;
 import androidx.camera.core.ImageAnalysis;
+import androidx.camera.core.ImageCapture;
+import androidx.camera.core.ImageCaptureException;
+import androidx.camera.core.ImageProxy;
 import androidx.camera.core.Preview;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.video.FileOutputOptions;
@@ -47,6 +55,7 @@ public class CameraPreview {
     private VideoCapture<Recorder> videoCapture;
     private Recording currentRecording;
     private ExecutorService cameraExecutor;
+    private ImageCapture imageCapture;
 
     public CameraPreview(Context context) {
         this.context = context;
@@ -92,6 +101,12 @@ public class CameraPreview {
                 //clear stream for next image
                 imageProxy.close();
             });
+            
+            // Set up image capture
+            imageCapture = new ImageCapture.Builder()
+                    .setTargetAspectRatio(AspectRatio.RATIO_4_3)
+                    .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+                    .build();
 
             // Set up video capture with updated approach for Android 15 compatibility
             try {
@@ -111,6 +126,7 @@ public class CameraPreview {
                             cameraSelector, 
                             cameraPreview, 
                             imageAnalysis,
+                            imageCapture,
                             videoCapture);
                     
                     cameraControl = camera.getCameraControl();
@@ -118,14 +134,31 @@ public class CameraPreview {
                     android.util.Log.e("CameraPreview", "Error binding use cases: " + e.getMessage());
                     e.printStackTrace();
                     
-                    // Fallback to binding without video capture if that fails
-                    Camera camera = cameraProvider.bindToLifecycle(
-                            (LifecycleOwner) activity, 
-                            cameraSelector, 
-                            cameraPreview, 
-                            imageAnalysis);
-                    
-                    cameraControl = camera.getCameraControl();
+    
+                    try {
+                        Camera camera = cameraProvider.bindToLifecycle(
+                                (LifecycleOwner) activity, 
+                                cameraSelector, 
+                                cameraPreview, 
+                                imageAnalysis,
+                                imageCapture);
+                        
+                        cameraControl = camera.getCameraControl();
+                        videoCapture = null; // Mark videoCapture as unavailable
+                    } catch (Exception e2) {
+                        android.util.Log.e("CameraPreview", "Error binding without video: " + e2.getMessage());
+                        
+                        // Final fallback without image and video capture
+                        Camera camera = cameraProvider.bindToLifecycle(
+                                (LifecycleOwner) activity, 
+                                cameraSelector, 
+                                cameraPreview, 
+                                imageAnalysis);
+                        
+                        cameraControl = camera.getCameraControl();
+                        imageCapture = null; // Mark imageCapture as unavailable
+                        videoCapture = null; // Mark videoCapture as unavailable
+                    }
                 }
             } catch (Exception e) {
                 android.util.Log.e("CameraPreview", "Video capture setup error: " + e.getMessage());
@@ -133,13 +166,28 @@ public class CameraPreview {
                 
                 // Fallback to binding without video capture
                 cameraProvider.unbindAll();
-                Camera camera = cameraProvider.bindToLifecycle(
-                        (LifecycleOwner) activity, 
-                        cameraSelector, 
-                        cameraPreview, 
-                        imageAnalysis);
-                
-                cameraControl = camera.getCameraControl();
+                try {
+                    Camera camera = cameraProvider.bindToLifecycle(
+                            (LifecycleOwner) activity, 
+                            cameraSelector, 
+                            cameraPreview, 
+                            imageAnalysis,
+                            imageCapture);
+                    
+                    cameraControl = camera.getCameraControl();
+                } catch (Exception e2) {
+                    android.util.Log.e("CameraPreview", "Error binding without video: " + e2.getMessage());
+                    
+                    // Final fallback without image capture
+                    Camera camera = cameraProvider.bindToLifecycle(
+                            (LifecycleOwner) activity, 
+                            cameraSelector, 
+                            cameraPreview, 
+                            imageAnalysis);
+                    
+                    cameraControl = camera.getCameraControl();
+                    imageCapture = null; // Mark imageCapture as unavailable
+                }
             }
 
             cameraPreview.setSurfaceProvider(mPreviewView.getSurfaceProvider());
@@ -350,5 +398,99 @@ public class CameraPreview {
         }
         
         cameraExecutor.shutdown();
+    }
+
+    // Takes a picture and returns the image as bytes
+    public interface PhotoCaptureCallback {
+        void onCaptureSuccess(byte[] imageBytes);
+        void onError(String errorMessage);
+    }
+    
+    public void takePictureAsBytes(PhotoCaptureCallback callback) {
+        if (imageCapture == null) {
+            callback.onError("Camera photo capture not available on this device");
+            return;
+        }
+        
+        // Log that we're taking a picture
+        android.util.Log.d("CameraPreview", "Taking picture...");
+        
+        imageCapture.takePicture(
+                cameraExecutor,
+                new ImageCapture.OnImageCapturedCallback() {
+                    @Override
+                    public void onCaptureSuccess(ImageProxy imageProxy) {
+                        try {
+                            // Convert ImageProxy to byte array
+                            byte[] bytes = imageProxyToJpegByteArray(imageProxy, 100);
+                            android.util.Log.d("CameraPreview", "Photo captured successfully, size: " + bytes.length + " bytes");
+                            
+                            // Return the bytes via callback on main thread
+                            ContextCompat.getMainExecutor(context).execute(() -> {
+                                callback.onCaptureSuccess(bytes);
+                            });
+                        } catch (Exception e) {
+                            android.util.Log.e("CameraPreview", "Error processing captured image: " + e.getMessage());
+                            ContextCompat.getMainExecutor(context).execute(() -> {
+                                callback.onError("Error processing image: " + e.getMessage());
+                            });
+                        } finally {
+                            imageProxy.close();
+                        }
+                    }
+                    
+                    @Override
+                    public void onError(ImageCaptureException exception) {
+                        android.util.Log.e("CameraPreview", "Photo capture failed: " + exception.getMessage());
+                        ContextCompat.getMainExecutor(context).execute(() -> {
+                            callback.onError("Photo capture failed: " + exception.getMessage());
+                        });
+                    }
+                }
+        );
+    }
+    
+    // Helper method to convert ImageProxy to JPEG byte array
+    private byte[] imageProxyToJpegByteArray(ImageProxy image, int quality) {
+        ByteBuffer buffer = image.getPlanes()[0].getBuffer();
+        byte[] bytes = new byte[buffer.remaining()];
+        buffer.get(bytes);
+        
+        // Get the image format
+        int format = image.getFormat();
+        android.util.Log.d("CameraPreview", "Image format: " + format);
+        
+        // If this is already JPEG, return the bytes directly
+        if (format == android.graphics.ImageFormat.JPEG) {
+            return bytes;
+        }
+        
+        // Otherwise, we need to convert to JPEG
+        Bitmap bitmap = null;
+        
+        // Convert to bitmap (for most formats like YUV, this is a standard approach)
+        try {
+            bitmap = ImageUtils.toBitmap(image);
+            
+            // Apply rotation if needed
+            int rotationDegrees = image.getImageInfo().getRotationDegrees();
+            if (rotationDegrees != 0) {
+                Matrix matrix = new Matrix();
+                matrix.postRotate(rotationDegrees);
+                bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
+            }
+            
+            // Convert to JPEG bytes
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            bitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream);
+            return outputStream.toByteArray();
+        } catch (Exception e) {
+            android.util.Log.e("CameraPreview", "Error converting image: " + e.getMessage());
+            throw new RuntimeException("Failed to convert image to JPEG", e);
+        } finally {
+            if (bitmap != null) {
+                bitmap.recycle();
+            }
+        }
     }
 }
