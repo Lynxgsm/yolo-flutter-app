@@ -87,10 +87,25 @@ class UltralyticsYoloCameraController
   }
 
   // Stop recording
-  Future<void> stopRecording() async {
+  Future<String> stopRecording() async {
     try {
       final result = await _ultralyticsYoloPlatform.stopRecording();
-      if (result != 'Success') {
+      if (result == null) {
+        throw Exception('Failed to stop recording: null result');
+      }
+
+      // Handling the case where the result is "Success: [path]"
+      if (result.startsWith('Success')) {
+        if (result.length > 8 && result.contains(':')) {
+          // Extract the path after "Success: "
+          final path = result.substring(result.indexOf(':') + 2);
+          if (kDebugMode) {
+            print('Recording saved at: $path');
+          }
+          return path;
+        }
+        return ''; // Success but no path returned
+      } else {
         throw Exception('Failed to stop recording: $result');
       }
     } catch (e) {

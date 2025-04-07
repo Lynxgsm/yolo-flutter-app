@@ -455,7 +455,9 @@ public class MethodCallHandler implements MethodChannel.MethodCallHandler {
             if (response.startsWith("Error")) {
                 result.error("RECORDING_ERROR", response, null);
             } else {
-                result.success("Success");
+                // Pass the full response including the path if present
+                result.success(response);
+                android.util.Log.d("MethodCallHandler", "Recording stopped with result: " + response);
             }
         } catch (Exception e) {
             result.error("RECORDING_ERROR", "Failed to stop recording: " + e.getMessage(), null);
