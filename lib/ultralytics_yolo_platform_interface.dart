@@ -46,7 +46,9 @@ abstract class UltralyticsYoloPlatform extends PlatformInterface {
 
   /// Set the number of items threshold for the model.
   Future<String?> setNumItemsThreshold(int numItems) {
-    throw UnimplementedError('setNumItemsThreshold has not been implemented.');
+    throw UnimplementedError(
+      'setNumItemsThreshold has not been implemented.',
+    );
   }
 
   /// Set the zoom ratio for the camera preview.
@@ -131,7 +133,7 @@ abstract class UltralyticsYoloPlatform extends PlatformInterface {
     throw UnimplementedError('stopSavingVideo has not been implemented.');
   }
 
-  /// Take a picture as bytes
+  /// Capture a picture from the camera and return it as bytes.
   Future<Uint8List?> takePictureAsBytes() {
     throw UnimplementedError('takePictureAsBytes has not been implemented.');
   }

@@ -115,6 +115,9 @@ public class MethodCallHandler implements MethodChannel.MethodCallHandler {
             case "stopRecording":
                 stopRecording(call, result);
                 break;
+            case "takePictureAsBytes":
+                takePictureAsBytes(call, result);
+                break;
             default:
                 result.notImplemented();
                 break;
@@ -456,6 +459,24 @@ public class MethodCallHandler implements MethodChannel.MethodCallHandler {
             }
         } catch (Exception e) {
             result.error("RECORDING_ERROR", "Failed to stop recording: " + e.getMessage(), null);
+        }
+    }
+
+    private void takePictureAsBytes(MethodCall call, MethodChannel.Result result) {
+        if (cameraPreview != null) {
+            cameraPreview.takePictureAsBytes(new CameraPreview.PhotoCaptureCallback() {
+                @Override
+                public void onCaptureSuccess(byte[] imageBytes) {
+                    result.success(imageBytes);
+                }
+
+                @Override
+                public void onError(String errorMessage) {
+                    result.error("PHOTO_ERROR", errorMessage, null);
+                }
+            });
+        } else {
+            result.error("CAMERA_ERROR", "Camera preview not initialized", null);
         }
     }
 }
