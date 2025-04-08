@@ -351,26 +351,69 @@ public class CameraPreview {
             Recording recording = currentRecording;
             currentRecording = null;
             
+            // Create a reference to last recording path
+            final String[] recordingPath = new String[1];
+            recordingPath[0] = null;
+            
+            // CountDownLatch to make sure we wait for recording to stop
+            final java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+            
+            // Store any errors that occur
+            final StringBuilder errorMessage = new StringBuilder();
+            
             // Use a thread to avoid blocking the UI
             new Thread(() -> {
                 try {
+                    // Stop the recording
                     recording.stop();
                     android.util.Log.d("CameraPreview", "Recording stopped successfully");
+                    
+                    // Wait a moment for file to be finalized
+                    try {
+                        Thread.sleep(500);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                    
+                    // Get the file path from the output directory
+                    File outputDir = new File(context.getExternalFilesDir(null), "recordings");
+                    File[] files = outputDir.listFiles();
+                    if (files != null && files.length > 0) {
+                        // Sort by last modified to get the most recent one
+                        java.util.Arrays.sort(files, (f1, f2) -> Long.compare(f2.lastModified(), f1.lastModified()));
+                        recordingPath[0] = files[0].getAbsolutePath();
+                        android.util.Log.d("CameraPreview", "Found recording file: " + recordingPath[0]);
+                    } else {
+                        android.util.Log.d("CameraPreview", "No recording files found in " + outputDir.getAbsolutePath());
+                    }
                 } catch (Exception e) {
+                    errorMessage.append(e.getMessage());
                     android.util.Log.e("CameraPreview", "Error stopping recording: " + e.getMessage());
                     e.printStackTrace();
+                } finally {
+                    latch.countDown();
                 }
             }).start();
             
-            // Get the file path from the output directory - this is our best guess if we can't get it from events
-            File outputDir = new File(context.getExternalFilesDir(null), "recordings");
-            File[] files = outputDir.listFiles();
-            if (files != null && files.length > 0) {
-                // Sort by last modified to get the most recent one
-                java.util.Arrays.sort(files, (f1, f2) -> Long.compare(f2.lastModified(), f1.lastModified()));
-                String path = files[0].getAbsolutePath();
-                android.util.Log.d("CameraPreview", "Most recent recording file: " + path);
-                return "Success: " + path;
+            // Wait for the recording to stop (max 3 seconds)
+            try {
+                boolean completed = latch.await(3, java.util.concurrent.TimeUnit.SECONDS);
+                if (!completed) {
+                    android.util.Log.w("CameraPreview", "Timed out waiting for recording to stop");
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                android.util.Log.e("CameraPreview", "Interrupted while waiting for recording to stop");
+            }
+            
+            // Check if we have an error
+            if (errorMessage.length() > 0) {
+                return "Error: " + errorMessage.toString();
+            }
+            
+            // Return the path if we found it
+            if (recordingPath[0] != null) {
+                return "Success: " + recordingPath[0];
             }
             
             return "Success";
