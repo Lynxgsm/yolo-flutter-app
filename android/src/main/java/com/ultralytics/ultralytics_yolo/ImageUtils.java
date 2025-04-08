@@ -6,6 +6,7 @@ import android.graphics.ImageFormat;
 import android.graphics.Matrix;
 import android.graphics.Rect;
 import android.graphics.YuvImage;
+import android.media.Image;
 import androidx.camera.core.ImageProxy;
 import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
@@ -15,6 +16,86 @@ public class ImageUtils {
         byte[] nv21 = yuv420888ToNv21(imageProxy);
         YuvImage yuvImage = new YuvImage(nv21, ImageFormat.NV21, imageProxy.getWidth(), imageProxy.getHeight(), null);
         return yuvImageToBitmap(yuvImage);
+    }
+
+    /**
+     * Adjusts detection coordinates to match the display correctly
+     * This is particularly important when rotating from landscape to portrait and vice-versa
+     *
+     * @param detections The detection array with coordinates (x, y, width, height, confidence, class)
+     * @param isMirrored Whether the image was mirrored (front camera)
+     * @param inputSize The input size of the model
+     * @param previewWidth The width of the preview
+     * @param previewHeight The height of the preview
+     * @return The adjusted detections
+     */
+    public static float[][] adjustDetectionCoordinates(
+            float[][] detections, 
+            boolean isMirrored,
+            int inputSize,
+            int previewWidth, 
+            int previewHeight) {
+            
+        if (detections == null) return null;
+        
+        // Handle portrait mode (most common in mobile apps)
+        // In portrait, the camera feed is rotated 90 degrees from the sensor
+        boolean isPortrait = previewHeight > previewWidth;
+        
+        android.util.Log.d("ImageUtils", "Adjusting coordinates - portrait: " + isPortrait + 
+                          ", mirrored: " + isMirrored + 
+                          ", preview size: " + previewWidth + "x" + previewHeight + 
+                          ", model input size: " + inputSize);
+        
+        for (float[] detection : detections) {
+            if (detection == null || detection.length < 6) continue;
+            
+            // Store original values
+            float origX = detection[0];
+            float origY = detection[1];
+            float origW = detection[2];
+            float origH = detection[3];
+            
+            if (isPortrait) {
+                // PROBLEM: The portrait mode transformations need to be fixed
+                
+                // 1. In portrait mode, x becomes y and y becomes x due to 90 degree rotation
+                float tempX = detection[0];
+                float tempY = detection[1];
+                float tempW = detection[2];
+                float tempH = detection[3];
+                
+                // Handle 90 degree rotation - swap coordinates
+                // This makes the top edge of the camera feed the right edge of the screen
+                detection[0] = 1.0f - tempY - tempH; // Transform y to x with inversion
+                detection[1] = tempX; // Transform x to y
+                
+                // Also swap width and height
+                detection[2] = tempH;
+                detection[3] = tempW;
+                
+                // Handle mirroring for front camera if needed
+                if (isMirrored) {
+                    // For front camera in portrait, we need to flip the y coordinate
+                    detection[1] = 1.0f - detection[1] - detection[3];
+                }
+            } else {
+                // For landscape mode, only need to handle mirroring
+                if (isMirrored) {
+                    // For mirrored camera in landscape, flip x coordinate
+                    detection[0] = 1.0f - detection[0] - detection[2];
+                }
+            }
+            
+            // Additional logging for debugging
+            android.util.Log.d("ImageUtils", 
+                String.format("Detection adjusted: (%.2f, %.2f, %.2f, %.2f) => (%.2f, %.2f, %.2f, %.2f), conf=%.2f, class=%d", 
+                origX, origY, origW, origH,
+                detection[0], detection[1], detection[2], detection[3], 
+                detection[4], (int)detection[5]));
+        }
+        
+        return detections;
     }
 
     /**
@@ -76,6 +157,7 @@ public class ImageUtils {
 
         return matrix;
     }
+    
     private static Bitmap yuvImageToBitmap(YuvImage yuvImage) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         if (!yuvImage.compressToJpeg(new Rect(0, 0, yuvImage.getWidth(), yuvImage.getHeight()), 100, out))

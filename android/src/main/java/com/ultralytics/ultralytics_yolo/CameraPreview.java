@@ -2,8 +2,13 @@ package com.ultralytics.ultralytics_yolo;
 
 import android.app.Activity;
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.Matrix;
+import android.graphics.Rect;
 import android.util.Size;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -15,6 +20,9 @@ import androidx.camera.core.Camera;
 import androidx.camera.core.CameraControl;
 import androidx.camera.core.CameraSelector;
 import androidx.camera.core.ImageAnalysis;
+import androidx.camera.core.ImageCapture;
+import androidx.camera.core.ImageCaptureException;
+import androidx.camera.core.ImageProxy;
 import androidx.camera.core.Preview;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.video.FileOutputOptions;
@@ -28,20 +36,6 @@ import androidx.camera.video.QualitySelector;
 import androidx.camera.view.PreviewView;
 import androidx.core.content.ContextCompat;
 import androidx.lifecycle.LifecycleOwner;
-import androidx.camera.core.ImageCapture;
-import androidx.camera.core.ImageCaptureException;
-import androidx.camera.core.ImageProxy;
-
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.graphics.Matrix;
-import android.graphics.YuvImage;
-import android.graphics.ImageFormat;
-import android.graphics.Rect;
-import android.media.Image;
-import java.io.ByteArrayOutputStream;
-import java.nio.ByteBuffer;
-import java.util.concurrent.atomic.AtomicReference;
 
 import com.google.common.util.concurrent.ListenableFuture;
 import com.ultralytics.ultralytics_yolo.predict.Predictor;
@@ -59,9 +53,9 @@ public class CameraPreview {
     private PreviewView mPreviewView;
     private boolean busy = false;
     private VideoCapture<Recorder> videoCapture;
-    private ImageCapture imageCapture;
     private Recording currentRecording;
     private ExecutorService cameraExecutor;
+    private ImageCapture imageCapture;
 
     public CameraPreview(Context context) {
         this.context = context;
@@ -114,58 +108,85 @@ public class CameraPreview {
                     .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
                     .build();
 
-            // Set up video capture
-            Recorder recorder = new Recorder.Builder()
-                    .setQualitySelector(QualitySelector.from(Quality.HIGHEST))
-                    .build();
-            videoCapture = VideoCapture.withOutput(recorder);
-
-            // Unbind use cases before rebinding
-            cameraProvider.unbindAll();
-
+            // Set up video capture with updated approach for Android 15 compatibility
             try {
-                // First try to bind all use cases
-                Camera camera = cameraProvider.bindToLifecycle(
-                        (LifecycleOwner) activity, 
-                        cameraSelector, 
-                        cameraPreview, 
-                        imageAnalysis,
-                        imageCapture,
-                        videoCapture);
+                QualitySelector qualitySelector = QualitySelector.from(Quality.HIGHEST);
+                Recorder recorder = new Recorder.Builder()
+                        .setQualitySelector(qualitySelector)
+                        .build();
+                videoCapture = VideoCapture.withOutput(recorder);
                 
-                cameraControl = camera.getCameraControl();
-                android.util.Log.d("CameraPreview", "Successfully bound all camera use cases");
-            } catch (IllegalArgumentException e) {
-                // If binding all use cases fails, try without VideoCapture
-                android.util.Log.w("CameraPreview", "Failed to bind all use cases: " + e.getMessage());
-                android.util.Log.w("CameraPreview", "Trying without video capture");
+                // Unbind use cases before rebinding
+                cameraProvider.unbindAll();
                 
+                // Bind use cases to camera - handle potential exceptions
                 try {
                     Camera camera = cameraProvider.bindToLifecycle(
-                            (LifecycleOwner) activity,
-                            cameraSelector,
-                            cameraPreview,
+                            (LifecycleOwner) activity, 
+                            cameraSelector, 
+                            cameraPreview, 
+                            imageAnalysis,
+                            imageCapture,
+                            videoCapture);
+                    
+                    cameraControl = camera.getCameraControl();
+                } catch (Exception e) {
+                    android.util.Log.e("CameraPreview", "Error binding use cases: " + e.getMessage());
+                    e.printStackTrace();
+                    
+    
+                    try {
+                        Camera camera = cameraProvider.bindToLifecycle(
+                                (LifecycleOwner) activity, 
+                                cameraSelector, 
+                                cameraPreview, 
+                                imageAnalysis,
+                                imageCapture);
+                        
+                        cameraControl = camera.getCameraControl();
+                        videoCapture = null; // Mark videoCapture as unavailable
+                    } catch (Exception e2) {
+                        android.util.Log.e("CameraPreview", "Error binding without video: " + e2.getMessage());
+                        
+                        // Final fallback without image and video capture
+                        Camera camera = cameraProvider.bindToLifecycle(
+                                (LifecycleOwner) activity, 
+                                cameraSelector, 
+                                cameraPreview, 
+                                imageAnalysis);
+                        
+                        cameraControl = camera.getCameraControl();
+                        imageCapture = null; // Mark imageCapture as unavailable
+                        videoCapture = null; // Mark videoCapture as unavailable
+                    }
+                }
+            } catch (Exception e) {
+                android.util.Log.e("CameraPreview", "Video capture setup error: " + e.getMessage());
+                e.printStackTrace();
+                
+                // Fallback to binding without video capture
+                cameraProvider.unbindAll();
+                try {
+                    Camera camera = cameraProvider.bindToLifecycle(
+                            (LifecycleOwner) activity, 
+                            cameraSelector, 
+                            cameraPreview, 
                             imageAnalysis,
                             imageCapture);
                     
                     cameraControl = camera.getCameraControl();
-                    videoCapture = null; // Mark videoCapture as unavailable
-                    android.util.Log.d("CameraPreview", "Successfully bound camera without video capture");
-                } catch (IllegalArgumentException e2) {
-                    // If that also fails, only bind the essential use cases
-                    android.util.Log.w("CameraPreview", "Failed to bind with image capture: " + e2.getMessage());
-                    android.util.Log.w("CameraPreview", "Falling back to minimal configuration");
+                } catch (Exception e2) {
+                    android.util.Log.e("CameraPreview", "Error binding without video: " + e2.getMessage());
                     
+                    // Final fallback without image capture
                     Camera camera = cameraProvider.bindToLifecycle(
-                            (LifecycleOwner) activity,
-                            cameraSelector,
-                            cameraPreview,
+                            (LifecycleOwner) activity, 
+                            cameraSelector, 
+                            cameraPreview, 
                             imageAnalysis);
                     
                     cameraControl = camera.getCameraControl();
                     imageCapture = null; // Mark imageCapture as unavailable
-                    videoCapture = null; // Mark videoCapture as unavailable
-                    android.util.Log.d("CameraPreview", "Bound minimal camera configuration");
                 }
             }
 
@@ -174,7 +195,211 @@ public class CameraPreview {
             busy = false;
         }
     }
+
+    public void setPredictorFrameProcessor(Predictor predictor) {
+        this.predictor = predictor;
+    }
+
+    public void setCameraFacing(int facing) {
+        if (cameraProvider != null) {
+            cameraProvider.unbindAll();
+            bindPreview(facing);
+        }
+    }
+
+    public void setScaleFactor(double factor) {
+        cameraControl.setZoomRatio((float)factor);
+    }
     
+    public String startRecording() {
+        if (videoCapture == null) {
+            return "Error: Camera not initialized";
+        }
+        
+        if (currentRecording != null) {
+            return "Error: Recording already in progress";
+        }
+        
+        try {
+            // Create output file in Documents directory for better accessibility
+            File outputDir = new File(context.getExternalFilesDir(null), "recordings");
+            if (!outputDir.exists()) {
+                if (!outputDir.mkdirs()) {
+                    android.util.Log.e("CameraPreview", "Failed to create output directory");
+                    return "Error: Failed to create output directory";
+                }
+            }
+            
+            String timestamp = new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new Date());
+            File outputFile = new File(outputDir, "yolo_recording_" + timestamp + ".mp4");
+            
+            // Log recording details
+            android.util.Log.d("CameraPreview", "Starting recording to " + outputFile.getAbsolutePath());
+            
+            // Set up recording options with highest quality
+            FileOutputOptions fileOutputOptions = new FileOutputOptions.Builder(outputFile).build();
+            
+            // Make sure the output directory is writable
+            if (!outputDir.canWrite()) {
+                android.util.Log.e("CameraPreview", "Output directory is not writable");
+                // Try to create a test file to check write permissions
+                try {
+                    File testFile = File.createTempFile("test", ".tmp", outputDir);
+                    if (testFile.exists()) {
+                        testFile.delete();
+                        android.util.Log.d("CameraPreview", "Directory passed write test");
+                    }
+                } catch (Exception e) {
+                    android.util.Log.e("CameraPreview", "Write test failed: " + e.getMessage());
+                    // Try a different directory if the app-specific directory fails
+                    outputDir = context.getFilesDir();
+                    outputFile = new File(outputDir, "yolo_recording_" + timestamp + ".mp4");
+                    fileOutputOptions = new FileOutputOptions.Builder(outputFile).build();
+                    android.util.Log.d("CameraPreview", "Using internal storage instead: " + outputFile.getAbsolutePath());
+                }
+            }
+            
+            // Start recording with more detailed error handling
+            try {
+                currentRecording = videoCapture.getOutput()
+                        .prepareRecording(context, fileOutputOptions)
+                        // Enable audio recording if needed
+                        .withAudioEnabled()
+                        .start(ContextCompat.getMainExecutor(context), videoRecordEvent -> {
+                            if (videoRecordEvent instanceof VideoRecordEvent.Start) {
+                                android.util.Log.d("CameraPreview", "Recording started");
+                            } else if (videoRecordEvent instanceof VideoRecordEvent.Finalize) {
+                                VideoRecordEvent.Finalize finalizeEvent = (VideoRecordEvent.Finalize) videoRecordEvent;
+                                if (!finalizeEvent.hasError()) {
+                                    android.util.Log.d("CameraPreview", "Recording saved successfully to " + 
+                                                    finalizeEvent.getOutputResults().getOutputUri());
+                                } else {
+                                    android.util.Log.e("CameraPreview", "Recording error: " + 
+                                                    finalizeEvent.getError());
+                                }
+                            }
+                        });
+                
+                return "Success";
+            } catch (Exception e) {
+                android.util.Log.e("CameraPreview", "Exception during recording start: " + e.getMessage());
+                e.printStackTrace();
+                
+                // Try fallback approach for Android 15 if the standard approach fails
+                try {
+                    // For Android 15, we might need to use MediaStore approach instead of direct file
+                    if (android.os.Build.VERSION.SDK_INT >= 33) {
+                        android.util.Log.d("CameraPreview", "Trying MediaStore approach for Android 13+");
+                        
+                        // Create MediaStore options with ContentValues
+                        String name = "yolo_recording_" + timestamp;
+                        android.content.ContentValues contentValues = new android.content.ContentValues();
+                        contentValues.put(android.provider.MediaStore.Video.Media.DISPLAY_NAME, name);
+                        contentValues.put(android.provider.MediaStore.Video.Media.MIME_TYPE, "video/mp4");
+                        // For Android 10 and above, we can add the relative path
+                        if (android.os.Build.VERSION.SDK_INT >= 29) {
+                            contentValues.put(android.provider.MediaStore.Video.Media.RELATIVE_PATH, 
+                                            "Movies/YoloRecordings");
+                        }
+                        
+                        MediaStoreOutputOptions mediaStoreOutputOptions = new MediaStoreOutputOptions.Builder(
+                                context.getContentResolver(),
+                                android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI)
+                                .setContentValues(contentValues)
+                                .build();
+                        
+                        currentRecording = videoCapture.getOutput()
+                                .prepareRecording(context, mediaStoreOutputOptions)
+                                .withAudioEnabled()
+                                .start(ContextCompat.getMainExecutor(context), videoRecordEvent -> {
+                                    if (videoRecordEvent instanceof VideoRecordEvent.Start) {
+                                        android.util.Log.d("CameraPreview", "Recording started (MediaStore)");
+                                    } else if (videoRecordEvent instanceof VideoRecordEvent.Finalize) {
+                                        VideoRecordEvent.Finalize finalizeEvent = (VideoRecordEvent.Finalize) videoRecordEvent;
+                                        if (!finalizeEvent.hasError()) {
+                                            android.util.Log.d("CameraPreview", "Recording saved successfully (MediaStore) to " + 
+                                                            finalizeEvent.getOutputResults().getOutputUri());
+                                        } else {
+                                            android.util.Log.e("CameraPreview", "Recording error (MediaStore): " + 
+                                                            finalizeEvent.getError());
+                                        }
+                                    }
+                                });
+                        return "Success";
+                    }
+                } catch (Exception ex) {
+                    android.util.Log.e("CameraPreview", "MediaStore approach also failed: " + ex.getMessage());
+                    ex.printStackTrace();
+                }
+                
+                return "Error: " + e.getMessage();
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            android.util.Log.e("CameraPreview", "Failed to start recording: " + e.getMessage());
+            return "Error: " + e.getMessage();
+        }
+    }
+    
+    public String stopRecording() {
+        if (currentRecording == null) {
+            return "Error: No active recording";
+        }
+        
+        try {
+            android.util.Log.d("CameraPreview", "Stopping recording");
+            Recording recording = currentRecording;
+            currentRecording = null;
+            
+            // Use a thread to avoid blocking the UI
+            new Thread(() -> {
+                try {
+                    recording.stop();
+                    android.util.Log.d("CameraPreview", "Recording stopped successfully");
+                } catch (Exception e) {
+                    android.util.Log.e("CameraPreview", "Error stopping recording: " + e.getMessage());
+                    e.printStackTrace();
+                }
+            }).start();
+            
+            // Get the file path from the output directory - this is our best guess if we can't get it from events
+            File outputDir = new File(context.getExternalFilesDir(null), "recordings");
+            File[] files = outputDir.listFiles();
+            if (files != null && files.length > 0) {
+                // Sort by last modified to get the most recent one
+                java.util.Arrays.sort(files, (f1, f2) -> Long.compare(f2.lastModified(), f1.lastModified()));
+                String path = files[0].getAbsolutePath();
+                android.util.Log.d("CameraPreview", "Most recent recording file: " + path);
+                return "Success: " + path;
+            }
+            
+            return "Success";
+        } catch (Exception e) {
+            e.printStackTrace();
+            android.util.Log.e("CameraPreview", "Error in stopRecording: " + e.getMessage());
+            return "Error: " + e.getMessage();
+        }
+    }
+    
+    public void saveVideoFrames(String outputPath) {
+        // Not implementing frame-by-frame recording for Android currently
+        // This is a placeholder for potential future implementation
+        android.util.Log.d("CameraPreview", "saveVideoFrames not implemented for Android");
+    }
+    
+    public void shutdown() {
+        if (currentRecording != null) {
+            try {
+                currentRecording.stop();
+            } catch (Exception e) {
+                android.util.Log.e("CameraPreview", "Error stopping recording during shutdown: " + e.getMessage());
+            }
+            currentRecording = null;
+        }
+        
+        cameraExecutor.shutdown();
+    }
+
     // Takes a picture and returns the image as bytes
     public interface PhotoCaptureCallback {
         void onCaptureSuccess(byte[] imageBytes);
@@ -245,7 +470,7 @@ public class CameraPreview {
         
         // Convert to bitmap (for most formats like YUV, this is a standard approach)
         try {
-            bitmap = toBitmap(image);
+            bitmap = ImageUtils.toBitmap(image);
             
             // Apply rotation if needed
             int rotationDegrees = image.getImageInfo().getRotationDegrees();
@@ -267,168 +492,5 @@ public class CameraPreview {
                 bitmap.recycle();
             }
         }
-    }
-    
-    // Convert ImageProxy to Bitmap
-    private Bitmap toBitmap(ImageProxy image) {
-        // Get the Image from ImageProxy
-        Image mediaImage = image.getImage();
-        if (mediaImage == null) {
-            return null;
-        }
-        
-        // Convert to JPEG bytes
-        byte[] jpegBytes;
-        if (mediaImage.getFormat() == ImageFormat.YUV_420_888) {
-            jpegBytes = yuv420ToJpeg(mediaImage);
-        } else {
-            // Try standard approach if it's not YUV format
-            ByteBuffer buffer = image.getPlanes()[0].getBuffer();
-            byte[] bytes = new byte[buffer.remaining()];
-            buffer.get(bytes);
-            jpegBytes = bytes;
-        }
-        
-        // Convert bytes to bitmap
-        return BitmapFactory.decodeByteArray(jpegBytes, 0, jpegBytes.length);
-    }
-    
-    // Convert Image to JPEG bytes
-    private byte[] imageToJpegBytes(Image image) {
-        if (image.getFormat() == ImageFormat.YUV_420_888) {
-            return yuv420ToJpeg(image);
-        } else {
-            android.util.Log.e("CameraPreview", "Unsupported image format: " + image.getFormat());
-            return new byte[0];
-        }
-    }
-    
-    // Convert YUV_420_888 to JPEG
-    private byte[] yuv420ToJpeg(Image image) {
-        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        
-        // Get image planes
-        Image.Plane[] planes = image.getPlanes();
-        
-        // Get the YUV data
-        ByteBuffer yBuffer = planes[0].getBuffer();
-        ByteBuffer uBuffer = planes[1].getBuffer();
-        ByteBuffer vBuffer = planes[2].getBuffer();
-        
-        int ySize = yBuffer.remaining();
-        int uSize = uBuffer.remaining();
-        int vSize = vBuffer.remaining();
-        
-        byte[] data = new byte[ySize + uSize + vSize];
-        
-        // Copy Y data
-        yBuffer.get(data, 0, ySize);
-        // Copy U data
-        uBuffer.get(data, ySize, uSize);
-        // Copy V data
-        vBuffer.get(data, ySize + uSize, vSize);
-        
-        // Create YuvImage
-        YuvImage yuvImage = new YuvImage(
-                data,
-                ImageFormat.NV21, // Note: We're using NV21 format for YuvImage
-                image.getWidth(),
-                image.getHeight(),
-                null
-        );
-        
-        // Compress to JPEG
-        yuvImage.compressToJpeg(
-                new Rect(0, 0, image.getWidth(), image.getHeight()),
-                100, // Quality (0-100)
-                outputStream
-        );
-        
-        return outputStream.toByteArray();
-    }
-
-    public void setPredictorFrameProcessor(Predictor predictor) {
-        this.predictor = predictor;
-    }
-
-    public void setCameraFacing(int facing) {
-        if (cameraProvider != null) {
-            cameraProvider.unbindAll();
-            bindPreview(facing);
-        }
-    }
-
-    public void setScaleFactor(double factor) {
-        cameraControl.setZoomRatio((float)factor);
-    }
-    
-    public String startRecording() {
-        if (videoCapture == null) {
-            return "Error: Video recording not available on this device";
-        }
-        
-        if (currentRecording != null) {
-            return "Error: Recording already in progress";
-        }
-        
-        try {
-            // Create output file
-            File outputDir = new File(context.getCacheDir(), "recordings");
-            if (!outputDir.exists()) {
-                outputDir.mkdirs();
-            }
-            
-            String timestamp = new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new Date());
-            File outputFile = new File(outputDir, "yolo_recording_" + timestamp + ".mp4");
-            
-            // Set up recording options
-            FileOutputOptions fileOutputOptions = new FileOutputOptions.Builder(outputFile).build();
-            
-            // Start recording
-            currentRecording = videoCapture.getOutput().prepareRecording(context, fileOutputOptions)
-                    .start(ContextCompat.getMainExecutor(context), videoRecordEvent -> {
-                        if (videoRecordEvent instanceof VideoRecordEvent.Finalize) {
-                            VideoRecordEvent.Finalize finalizeEvent = (VideoRecordEvent.Finalize) videoRecordEvent;
-                            if (!finalizeEvent.hasError()) {
-                                // Recording saved successfully
-                                android.util.Log.d("CameraPreview", "Recording saved successfully to " + outputFile.getAbsolutePath());
-                            } else {
-                                // Handle recording error
-                                android.util.Log.e("CameraPreview", "Recording error: " + finalizeEvent.getError());
-                            }
-                        }
-                    });
-            
-            android.util.Log.d("CameraPreview", "Started recording to " + outputFile.getAbsolutePath());
-            return "Success";
-        } catch (Exception e) {
-            e.printStackTrace();
-            android.util.Log.e("CameraPreview", "Error starting recording: " + e.getMessage());
-            return "Error: " + e.getMessage();
-        }
-    }
-    
-    public String stopRecording() {
-        if (currentRecording == null) {
-            return "Error: No active recording";
-        }
-        
-        try {
-            currentRecording.stop();
-            currentRecording = null;
-            return "Success";
-        } catch (Exception e) {
-            e.printStackTrace();
-            return "Error: " + e.getMessage();
-        }
-    }
-    
-    public void shutdown() {
-        if (currentRecording != null) {
-            currentRecording.stop();
-            currentRecording = null;
-        }
-        
-        cameraExecutor.shutdown();
     }
 }

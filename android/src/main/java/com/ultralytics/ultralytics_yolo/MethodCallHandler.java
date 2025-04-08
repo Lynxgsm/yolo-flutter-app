@@ -185,29 +185,88 @@ public class MethodCallHandler implements MethodChannel.MethodCallHandler {
 
     private void setPredictorCallbacks() {
         if (predictor instanceof Detector) {
-            // Multiply by 3/4 instead of 4/3 because the camera preview frame is rotated -90°
-            // float newWidth = heightDp * 3 / 4;
-            float newWidth = heightDp * CAMERA_PREVIEW_SIZE.getHeight() / CAMERA_PREVIEW_SIZE.getWidth();
-            final float offsetX = (widthDp - newWidth) / 2;
+            // Get camera preview dimensions and calculate scaling factors
+            float previewWidth = CAMERA_PREVIEW_SIZE.getWidth();
+            float previewHeight = CAMERA_PREVIEW_SIZE.getHeight();
+            
+            // Determine device orientation
+            int orientation = context.getResources().getConfiguration().orientation;
+            boolean isPortrait = orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT;
+            
+            // Calculate scaling based on device orientation
+            float newWidth, newHeight, offsetX = 0, offsetY = 0;
+            
+            // Log dimensions for debugging
+            android.util.Log.d("MethodCallHandler", String.format(
+                "Screen: %.1f x %.1f dp, Preview: %.1f x %.1f, Portrait: %b",
+                widthDp, heightDp, previewWidth, previewHeight, isPortrait));
+            
+            if (isPortrait) {
+                // In portrait mode, the preview is rotated
+                // Calculate appropriate width to maintain aspect ratio
+                newWidth = heightDp * (previewWidth / previewHeight);
+                newHeight = heightDp;
+                
+                // Center horizontally 
+                if (newWidth < widthDp) {
+                    offsetX = (widthDp - newWidth) / 2;
+                }
+            } else {
+                // In landscape mode, use full width
+                newWidth = widthDp;
+                // Calculate appropriate height to maintain aspect ratio
+                newHeight = widthDp * (previewHeight / previewWidth);
+                
+                // Center vertically
+                if (newHeight < heightDp) {
+                    offsetY = (heightDp - newHeight) / 2;
+                }
+            }
+            
+            // Store final dimensions for use in callbacks
+            final float finalNewWidth = newWidth;
+            final float finalNewHeight = newHeight;
+            final float finalOffsetX = offsetX;
+            final float finalOffsetY = offsetY;
+            final boolean finalIsPortrait = isPortrait;
 
+            android.util.Log.d("MethodCallHandler", String.format(
+                "Final display: width=%.1f, height=%.1f, offsetX=%.1f, offsetY=%.1f",
+                newWidth, newHeight, offsetX, offsetY));
+            
             ((Detector) predictor).setObjectDetectionResultCallback(result -> {
                 List<Map<String, Object>> objects = new ArrayList<>();
 
                 for (float[] obj : result) {
+                    if (obj == null || obj.length < 6) continue;
+                    
                     Map<String, Object> objectMap = new HashMap<>();
 
-                    float x = obj[0] * newWidth + offsetX;
-                    float y = obj[1] * heightDp;
-                    float width = obj[2] * newWidth;
-                    float height = obj[3] * heightDp;
+                    // Get normalized coordinates (0-1)
+                    float x = obj[0]; 
+                    float y = obj[1];
+                    float width = obj[2];
+                    float height = obj[3];
+                    
+                    // Scale to screen dimensions
+                    float screenX = x * finalNewWidth + finalOffsetX;
+                    float screenY = y * finalNewHeight + finalOffsetY;
+                    float screenWidth = width * finalNewWidth;
+                    float screenHeight = height * finalNewHeight;
+                    
                     float confidence = obj[4];
                     int index = (int) obj[5];
                     String label = index < predictor.labels.size() ? predictor.labels.get(index) : "";
 
-                    objectMap.put("x", x);
-                    objectMap.put("y", y);
-                    objectMap.put("width", width);
-                    objectMap.put("height", height);
+                    // Log mapping for debugging
+                    android.util.Log.d("MethodCallHandler", String.format(
+                        "Mapping: (%.3f, %.3f, %.3f, %.3f) -> (%.1f, %.1f, %.1f, %.1f)",
+                        x, y, width, height, screenX, screenY, screenWidth, screenHeight));
+
+                    objectMap.put("x", screenX);
+                    objectMap.put("y", screenY);
+                    objectMap.put("width", screenWidth);
+                    objectMap.put("height", screenHeight);
                     objectMap.put("confidence", confidence);
                     objectMap.put("index", index);
                     objectMap.put("label", label);
@@ -404,20 +463,20 @@ public class MethodCallHandler implements MethodChannel.MethodCallHandler {
     }
 
     private void takePictureAsBytes(MethodCall call, MethodChannel.Result result) {
-        android.util.Log.d("MethodCallHandler", "takePictureAsBytes called");
-        
-        cameraPreview.takePictureAsBytes(new CameraPreview.PhotoCaptureCallback() {
-            @Override
-            public void onCaptureSuccess(byte[] imageBytes) {
-                android.util.Log.d("MethodCallHandler", "Photo captured successfully, sending " + imageBytes.length + " bytes");
-                result.success(imageBytes);
-            }
-            
-            @Override
-            public void onError(String errorMessage) {
-                android.util.Log.e("MethodCallHandler", "Photo capture error: " + errorMessage);
-                result.error("PHOTO_ERROR", errorMessage, null);
-            }
-        });
+        if (cameraPreview != null) {
+            cameraPreview.takePictureAsBytes(new CameraPreview.PhotoCaptureCallback() {
+                @Override
+                public void onCaptureSuccess(byte[] imageBytes) {
+                    result.success(imageBytes);
+                }
+
+                @Override
+                public void onError(String errorMessage) {
+                    result.error("PHOTO_ERROR", errorMessage, null);
+                }
+            });
+        } else {
+            result.error("CAMERA_ERROR", "Camera preview not initialized", null);
+        }
     }
 }
