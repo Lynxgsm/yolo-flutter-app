@@ -2,6 +2,7 @@ import AVFoundation
 import CoreVideo
 import UIKit
 import Photos
+import Vision
 
 public protocol VideoCaptureDelegate: AnyObject {
   func videoCapture(_ capture: VideoCapture, didCaptureVideoFrame: CMSampleBuffer)
@@ -126,9 +127,34 @@ public class VideoCapture: NSObject {
           print("DEBUG: Added movie file output")
         }
 
-        let connection = self.videoOutput.connection(with: .video)
-        connection?.videoOrientation = .portrait
-        connection?.isVideoMirrored = position == .front
+        guard let connection = self.videoOutput.connection(with: .video) else {
+          print("DEBUG: Failed to get video connection")
+          self.captureSession.commitConfiguration()
+          DispatchQueue.main.async { completion(false) }
+          return
+        }
+        
+        // Determine video orientation based on device orientation
+        let videoOrientation: AVCaptureVideoOrientation
+        switch UIDevice.current.orientation {
+        case .portrait:
+          videoOrientation = .portrait
+        case .portraitUpsideDown:
+          videoOrientation = .portraitUpsideDown
+        case .landscapeLeft:
+          videoOrientation = .landscapeRight  // Note: Camera orientation is opposite to device orientation
+        case .landscapeRight:
+          videoOrientation = .landscapeLeft   // Note: Camera orientation is opposite to device orientation
+        default:
+          videoOrientation = .portrait        // Default to portrait as fallback
+        }
+        
+        // Apply the orientation and fix for mirroring
+        connection.videoOrientation = videoOrientation
+        connection.isVideoMirrored = position == .front
+        
+        // Log the applied orientation
+        print("DEBUG: Setting video orientation to: \(videoOrientation.rawValue) for device orientation: \(UIDevice.current.orientation.rawValue)")
 
         self.captureSession.commitConfiguration()
 
@@ -140,8 +166,30 @@ public class VideoCapture: NSObject {
           if let connection = self.previewLayer?.connection, connection.isVideoMirroringSupported {
             connection.automaticallyAdjustsVideoMirroring = false
             connection.isVideoMirrored = position == .front
+            
+            // Make preview layer also respect device orientation
+            if connection.isVideoOrientationSupported {
+              // Set the same orientation as the video connection
+              let videoOrientation: AVCaptureVideoOrientation
+              switch UIDevice.current.orientation {
+              case .portrait:
+                videoOrientation = .portrait
+              case .portraitUpsideDown:
+                videoOrientation = .portraitUpsideDown
+              case .landscapeLeft:
+                videoOrientation = .landscapeRight
+              case .landscapeRight:
+                videoOrientation = .landscapeLeft
+              default:
+                videoOrientation = .portrait
+              }
+              connection.videoOrientation = videoOrientation
+              print("DEBUG: Setting preview layer orientation to: \(videoOrientation.rawValue)")
+            }
           }
-
+          
+          // Notify completion to allow the native view to set up the preview layer
+          // We'll handle proper sizing when the layer is added to the view
           completion(true)
         }
       } catch {
@@ -159,6 +207,17 @@ public class VideoCapture: NSObject {
         print("DEBUG: Camera started running")
       }
     }
+    
+    // Add observer for device orientation changes
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(deviceOrientationDidChange),
+      name: UIDevice.orientationDidChangeNotification,
+      object: nil
+    )
+    
+    // Enable device orientation notifications
+    UIDevice.current.beginGeneratingDeviceOrientationNotifications()
   }
 
   public func stop() {
@@ -167,6 +226,72 @@ public class VideoCapture: NSObject {
       // Wait for the session to stop
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
         print("DEBUG: Camera stopped running")
+      }
+    }
+    
+    // Remove orientation observer and stop generating notifications
+    NotificationCenter.default.removeObserver(self, name: UIDevice.orientationDidChangeNotification, object: nil)
+    UIDevice.current.endGeneratingDeviceOrientationNotifications()
+  }
+  
+  @objc private func deviceOrientationDidChange() {
+    // Only update when session is running
+    guard captureSession.isRunning else { return }
+    
+    // Get current device orientation
+    let deviceOrientation = UIDevice.current.orientation
+    
+    // Skip invalid orientations
+    guard deviceOrientation.isValidInterfaceOrientation else { return }
+    
+    print("DEBUG: Device orientation changed: \(deviceOrientation.rawValue)")
+    
+    // Convert to video orientation
+    let videoOrientation: AVCaptureVideoOrientation
+    switch deviceOrientation {
+    case .portrait:
+      videoOrientation = .portrait
+    case .portraitUpsideDown:
+      videoOrientation = .portraitUpsideDown
+    case .landscapeLeft:
+      videoOrientation = .landscapeRight
+    case .landscapeRight:
+      videoOrientation = .landscapeLeft
+    default:
+      videoOrientation = .portrait
+    }
+    
+    // Update video connection orientation
+    if let connection = videoOutput.connection(with: .video) {
+      if connection.isVideoOrientationSupported {
+        connection.videoOrientation = videoOrientation
+        print("DEBUG: Updated video connection orientation to: \(videoOrientation.rawValue)")
+      }
+    }
+    
+    // Update preview layer orientation and size to fill the screen
+    DispatchQueue.main.async {
+      if let connection = self.previewLayer?.connection {
+        if connection.isVideoOrientationSupported {
+          connection.videoOrientation = videoOrientation
+          print("DEBUG: Updated preview layer orientation to: \(videoOrientation.rawValue)")
+        }
+      }
+      
+      // Ensure the preview layer fills the screen by resizing it to match the parent view
+      if let previewLayer = self.previewLayer, let nativeView = self.nativeView {
+        let isLandscape = deviceOrientation.isLandscape
+        
+        // Get the parent view's bounds
+        let parentBounds = nativeView.view().bounds
+        
+        // Set the frame of the preview layer to match the parent view
+        previewLayer.frame = parentBounds
+        
+        // Force layout update
+        nativeView.view().layoutIfNeeded()
+        
+        print("DEBUG: Resized preview layer to fill screen: \(previewLayer.frame), isLandscape: \(isLandscape)")
       }
     }
   }

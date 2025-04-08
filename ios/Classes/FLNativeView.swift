@@ -29,14 +29,51 @@ public class FLNativeView: NSObject, FlutterPlatformView, VideoCaptureDelegate {
 
     videoCapture.nativeView = self
     videoCapture.delegate = methodHandler
+    
+    // Listen for device orientation changes to update frame
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(orientationChanged),
+      name: UIDevice.orientationDidChangeNotification,
+      object: nil
+    )
+    
     startCameraPreview(position: .back) { _ in
       // Initial camera setup complete
       print("DEBUG: Initial camera setup complete")
     }
   }
+  
+  deinit {
+    NotificationCenter.default.removeObserver(self)
+  }
 
   public func view() -> UIView {
     return previewView
+  }
+  
+  @objc private func orientationChanged() {
+    DispatchQueue.main.async { [weak self] in
+      guard let self = self else { return }
+      self.updatePreviewLayerFrame()
+    }
+  }
+  
+  private func updatePreviewLayerFrame() {
+    guard let previewLayer = videoCapture.previewLayer else { return }
+    
+    // Get the bounds of the view
+    let bounds = previewView.bounds
+    
+    // Ensure preview layer fills the entire view regardless of orientation
+    previewLayer.frame = bounds
+    
+    print("DEBUG: Updated preview layer frame to: \(bounds)")
+    
+    // Make sure the layer is at the back of the view hierarchy
+    if previewLayer.superlayer != previewView.layer {
+      previewView.layer.insertSublayer(previewLayer, at: 0)
+    }
   }
 
   private func startCameraPreview(
@@ -48,10 +85,9 @@ public class FLNativeView: NSObject, FlutterPlatformView, VideoCaptureDelegate {
         print("DEBUG: Video capture setup completed successfully")
         if let previewLayer = self.videoCapture.previewLayer {
           DispatchQueue.main.async {
-            previewLayer.frame = self.previewView.bounds
-            self.previewView.layer.addSublayer(previewLayer)
-            print("DEBUG: Added preview layer to view")
-
+            // Use the updatePreviewLayerFrame method to ensure consistent frame sizing
+            self.updatePreviewLayerFrame()
+            
             self.videoCapture.start()
             print("DEBUG: Started video capture")
             self.currentPosition = position
