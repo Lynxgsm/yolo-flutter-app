@@ -5,9 +5,6 @@
     <!-- Camera permission -->
     <uses-permission android:name="android.permission.CAMERA" />
     
-    <!-- Microphone permission for audio recording -->
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    
     <!-- Storage permissions for saving recordings -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" 
                      android:maxSdkVersion="28" />

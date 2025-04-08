@@ -263,8 +263,6 @@ public class CameraPreview {
             try {
                 currentRecording = videoCapture.getOutput()
                         .prepareRecording(context, fileOutputOptions)
-                        // Enable audio recording if needed
-                        .withAudioEnabled()
                         .start(ContextCompat.getMainExecutor(context), videoRecordEvent -> {
                             if (videoRecordEvent instanceof VideoRecordEvent.Start) {
                                 android.util.Log.d("CameraPreview", "Recording started");
@@ -310,7 +308,6 @@ public class CameraPreview {
                         
                         currentRecording = videoCapture.getOutput()
                                 .prepareRecording(context, mediaStoreOutputOptions)
-                                .withAudioEnabled()
                                 .start(ContextCompat.getMainExecutor(context), videoRecordEvent -> {
                                     if (videoRecordEvent instanceof VideoRecordEvent.Start) {
                                         android.util.Log.d("CameraPreview", "Recording started (MediaStore)");
