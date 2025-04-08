@@ -189,24 +189,11 @@ class PlatformChannelUltralyticsYolo implements UltralyticsYoloPlatform {
   @override
   Future<Uint8List?> takePictureAsBytes() async {
     try {
-      if (kDebugMode) {
-        print('Calling native takePictureAsBytes method');
-      }
-
       final result =
           await methodChannel.invokeMethod<Uint8List>('takePictureAsBytes');
-
-      if (kDebugMode) {
-        if (result == null) {
-          print('Native takePictureAsBytes returned null');
-        } else {
-          print('Native takePictureAsBytes returned ${result.length} bytes');
-        }
-      }
-
       return result;
     } catch (e) {
-      debugPrint('Error taking picture: $e');
+      print('Error taking picture: $e');
       return null;
     }
   }
