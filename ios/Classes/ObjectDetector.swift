@@ -97,21 +97,15 @@ public class ObjectDetector: Predictor {
       // The frame is always oriented based on the camera sensor,
       // so in most cases Vision needs to rotate it for the model to work as expected.
       let imageOrientation: CGImagePropertyOrientation
-      switch UIDevice.current.orientation {
-      case .portrait:
-        imageOrientation = .up
-      case .portraitUpsideDown:
-        imageOrientation = .down
-      case .landscapeLeft:
-        imageOrientation = .left
-      case .landscapeRight:
-        imageOrientation = .right
-      case .unknown:
-        print("The device orientation is unknown, the predictions may be affected")
-        fallthrough
-      default:
-        imageOrientation = .up
-      }
+      let deviceOrientation = UIDevice.current.orientation
+      
+      // For ML detection, we need to use a consistent orientation regardless of device orientation
+      // to ensure the model receives images in a consistent format
+      
+      // Always use .up orientation for the Vision framework
+      // This ensures consistent detection regardless of device orientation
+      imageOrientation = .up
+      print("Using UP orientation for detection - device orientation: \(deviceOrientation.rawValue)")
 
       // Invoke a VNRequestHandler with that image
       let handler = VNImageRequestHandler(
@@ -154,60 +148,110 @@ public class ObjectDetector: Predictor {
       if let results = request.results as? [VNRecognizedObjectObservation] {
         var recognitions: [[String: Any]] = []
 
-        let width = self.screenSize?.width ?? 375  // 375 pix
-        let height = self.screenSize?.height ?? 816  // 812 pix
-        let ratio: CGFloat = (height / width) / (4.0 / 3.0)  // .photo
+        // Get current device orientation
+        let deviceOrientation = UIDevice.current.orientation
+        let isLandscape = deviceOrientation.isLandscape
 
+        // Get screen dimensions
+        let width = self.screenSize?.width ?? 375
+        let height = self.screenSize?.height ?? 816
+        
+        // Log key information
+        print("Screen size: \(width) x \(height), orientation: \(deviceOrientation.rawValue), landscape: \(isLandscape)")
+        
         for i in 0..<100 {
           if i < results.count && i < self.numItemsThreshold {
             let prediction = results[i]
-
             var rect = prediction.boundingBox  // normalized xywh, origin lower left
-            switch UIDevice.current.orientation {
-            case .portraitUpsideDown:
+            
+            // Debug log
+            print("Raw detection: \(i), rect: \(rect), confidence: \(prediction.confidence), label: \(prediction.labels[0].identifier)")
+            
+            if isLandscape {
+              // For landscape, we need a consistent coordinate transformation approach
+              var fixedRect = rect
+              
+              // First, normalize coordinates to 0-1 range if they aren't already
+              if fixedRect.origin.x < 0 { fixedRect.origin.x = 0 }
+              if fixedRect.origin.y < 0 { fixedRect.origin.y = 0 }
+              if fixedRect.origin.x + fixedRect.width > 1 { fixedRect.size.width = 1 - fixedRect.origin.x }
+              if fixedRect.origin.y + fixedRect.height > 1 { fixedRect.size.height = 1 - fixedRect.origin.y }
+              
+              // Apply device-specific rotation
+              switch deviceOrientation {
+              case .landscapeLeft:
+                // 90° counterclockwise transformation
+                rect = CGRect(
+                  x: fixedRect.origin.y,
+                  y: 1.0 - fixedRect.origin.x - fixedRect.width,
+                  width: fixedRect.height, 
+                  height: fixedRect.width
+                )
+                
+              case .landscapeRight:
+                // 90° clockwise transformation
+                rect = CGRect(
+                  x: 1.0 - fixedRect.origin.y - fixedRect.height,
+                  y: fixedRect.origin.x,
+                  width: fixedRect.height,
+                  height: fixedRect.width
+                )
+                
+              default:
+                // Keep the original rect
+                rect = fixedRect
+              }
+              
+              // Flip vertically (Vision uses bottom-left origin, UI uses top-left)
+              rect.origin.y = 1.0 - rect.origin.y - rect.height
+              
+              // Convert normalized coordinates to screen coordinates
+              // This direct conversion is more stable than the aspect ratio adjustments
               rect = CGRect(
-                x: 1.0 - rect.origin.x - rect.width,
-                y: 1.0 - rect.origin.y - rect.height,
-                width: rect.width,
-                height: rect.height)
-            case .landscapeLeft:
-              rect = CGRect(
-                x: rect.origin.y,
-                y: 1.0 - rect.origin.x - rect.width,
-                width: rect.height,
-                height: rect.width)
-            case .landscapeRight:
-              rect = CGRect(
-                x: 1.0 - rect.origin.y - rect.height,
-                y: rect.origin.x,
-                width: rect.height,
-                height: rect.width)
-            case .unknown:
-              print("The device orientation is unknown, the predictions may be affected")
-              fallthrough
-            default: break
+                x: rect.origin.x * width,
+                y: rect.origin.y * height,
+                width: rect.width * width,
+                height: rect.height * height
+              )
+            } else {
+              // Original portrait mode handling
+              switch deviceOrientation {
+              case .portraitUpsideDown:
+                rect = CGRect(
+                  x: 1.0 - rect.origin.x - rect.width,
+                  y: 1.0 - rect.origin.y - rect.height,
+                  width: rect.width,
+                  height: rect.height)
+              default:
+                break
+              }
+              
+              // Apply aspect ratio correction
+              let ratio: CGFloat = (height / width) / (4.0 / 3.0)
+              if ratio >= 1 {
+                let offset = (1 - ratio) * (0.5 - rect.minX)
+                let transform = CGAffineTransform(scaleX: 1, y: -1).translatedBy(x: offset, y: -1)
+                rect = rect.applying(transform)
+                rect.size.width *= ratio
+              } else {
+                let offset = (ratio - 1) * (0.5 - rect.maxY)
+                let transform = CGAffineTransform(scaleX: 1, y: -1).translatedBy(x: 0, y: offset - 1)
+                rect = rect.applying(transform)
+                rect.size.height /= ratio
+              }
+              
+              // Scale normalized to pixels
+              rect = VNImageRectForNormalizedRect(rect, Int(width), Int(height))
             }
+            
+            // Debug the transformed coordinates
+            print("Transformed detection: \(i), rect: \(rect)")
 
-            if ratio >= 1 {  // iPhone ratio = 1.218
-              let offset = (1 - ratio) * (0.5 - rect.minX)
-              let transform = CGAffineTransform(scaleX: 1, y: -1).translatedBy(x: offset, y: -1)
-              rect = rect.applying(transform)
-              rect.size.width *= ratio
-            } else {  // iPad ratio = 0.75
-              let offset = (ratio - 1) * (0.5 - rect.maxY)
-              let transform = CGAffineTransform(scaleX: 1, y: -1).translatedBy(x: 0, y: offset - 1)
-              rect = rect.applying(transform)
-              rect.size.height /= ratio
-            }
-
-            // Scale normalized to pixels [375, 812] [width, height]
-            rect = VNImageRectForNormalizedRect(rect, Int(width), Int(height))
-
-            // The labels array is a list of VNClassificationObservation objects,
-            // with the highest scoring class first in the list.
+            // Get label information
             let label = prediction.labels[0].identifier
             let index = self.labels.firstIndex(of: label) ?? 0
             let confidence = prediction.labels[0].confidence
+            
             recognitions.append([
               "label": label,
               "confidence": confidence,

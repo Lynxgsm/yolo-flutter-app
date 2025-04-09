@@ -91,26 +91,33 @@ public class ObjectClassifier: Predictor {
       // The frame is always oriented based on the camera sensor,
       // so in most cases Vision needs to rotate it for the model to work as expected.
       let imageOrientation: CGImagePropertyOrientation
-      switch UIDevice.current.orientation {
-      case .portrait:
+      let deviceOrientation = UIDevice.current.orientation
+      
+      // For ML classification, we need to use a consistent orientation regardless of device orientation
+      // to ensure the model receives images in a consistent format
+      
+      // When in landscape, the key is to maintain a consistent orientation for the Vision framework
+      if deviceOrientation.isLandscape {
+        // In landscape, we still want to use .up orientation for consistent model processing
         imageOrientation = .up
-      case .portraitUpsideDown:
-        imageOrientation = .down
-      case .landscapeLeft:
-        imageOrientation = .left
-      case .landscapeRight:
-        imageOrientation = .right
-      case .unknown:
-        print("The device orientation is unknown, the predictions may be affected")
-        fallthrough
-      default:
-        imageOrientation = .up
+        print("Classifier using UP orientation for landscape - device orientation: \(deviceOrientation.rawValue)")
+      } else {
+        // In portrait modes, use the standard approach
+        switch deviceOrientation {
+        case .portrait:
+          imageOrientation = .up
+        case .portraitUpsideDown:
+          imageOrientation = .down
+        default:
+          imageOrientation = .up
+        }
+        print("Classifier using standard orientation mapping for portrait: \(imageOrientation.rawValue)")
       }
 
       // Invoke a VNRequestHandler with that image
       let handler = VNImageRequestHandler(
         cvPixelBuffer: pixelBuffer, orientation: imageOrientation, options: [:])
-      if UIDevice.current.orientation != .faceUp {  // stop if placed down on a table
+      if deviceOrientation != .faceUp {  // stop if placed down on a table
         t0 = CACurrentMediaTime()  // inference start
         do {
           try handler.perform([visionRequest!])
