@@ -118,6 +118,9 @@ public class MethodCallHandler implements MethodChannel.MethodCallHandler {
             case "takePictureAsBytes":
                 takePictureAsBytes(call, result);
                 break;
+            case "isCameraInitialized":
+                isCameraInitialized(result);
+                break;
             default:
                 result.notImplemented();
                 break;
@@ -465,20 +468,21 @@ public class MethodCallHandler implements MethodChannel.MethodCallHandler {
     }
 
     private void takePictureAsBytes(MethodCall call, MethodChannel.Result result) {
-        if (cameraPreview != null) {
-            cameraPreview.takePictureAsBytes(new CameraPreview.PhotoCaptureCallback() {
-                @Override
-                public void onCaptureSuccess(byte[] imageBytes) {
-                    result.success(imageBytes);
-                }
+        cameraPreview.takePictureAsBytes(new CameraPreview.PhotoCaptureCallback() {
+            @Override
+            public void onCaptureSuccess(byte[] imageBytes) {
+                result.success(imageBytes);
+            }
 
-                @Override
-                public void onError(String errorMessage) {
-                    result.error("PHOTO_ERROR", errorMessage, null);
-                }
-            });
-        } else {
-            result.error("CAMERA_ERROR", "Camera preview not initialized", null);
-        }
+            @Override
+            public void onError(String errorMessage) {
+                result.error("TakePictureError", errorMessage, null);
+            }
+        });
+    }
+
+    private void isCameraInitialized(MethodChannel.Result result) {
+        boolean isInitialized = cameraPreview.isCameraInitialized();
+        result.success(isInitialized);
     }
 }

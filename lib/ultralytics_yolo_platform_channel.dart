@@ -197,4 +197,18 @@ class PlatformChannelUltralyticsYolo implements UltralyticsYoloPlatform {
       return null;
     }
   }
+
+  @override
+  Future<bool> isCameraInitialized() async {
+    try {
+      final result =
+          await methodChannel.invokeMethod<bool>('isCameraInitialized');
+      return result ?? false;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error checking camera initialization: $e');
+      }
+      return false;
+    }
+  }
 }

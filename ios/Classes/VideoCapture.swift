@@ -56,6 +56,11 @@ public class VideoCapture: NSObject {
     print("DEBUG: VideoCapture initialized")
   }
 
+  public func isCameraInitialized() -> Bool {
+    // Check if the session is running and the preview layer is set up
+    return captureSession.isRunning && previewLayer != nil
+  }
+
   public func setUp(
     sessionPreset: AVCaptureSession.Preset,
     position: AVCaptureDevice.Position,

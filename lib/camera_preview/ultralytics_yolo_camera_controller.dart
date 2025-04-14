@@ -170,4 +170,19 @@ class UltralyticsYoloCameraController
       return null;
     }
   }
+
+  /// Check if the camera is initialized.
+  Future<bool> isCameraInitialized() async {
+    try {
+      final result = await _ultralyticsYoloPlatform.isCameraInitialized();
+      // Handle potential null result, default to false
+      return result ?? false;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error checking camera initialization: $e');
+      }
+      // Return false in case of any error
+      return false;
+    }
+  }
 }

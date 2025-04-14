@@ -137,4 +137,9 @@ abstract class UltralyticsYoloPlatform extends PlatformInterface {
   Future<Uint8List?> takePictureAsBytes() {
     throw UnimplementedError('takePictureAsBytes has not been implemented.');
   }
+
+  /// Check if the camera is initialized.
+  Future<bool> isCameraInitialized() {
+    throw UnimplementedError('isCameraInitialized has not been implemented.');
+  }
 }

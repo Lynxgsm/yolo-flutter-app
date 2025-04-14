@@ -85,6 +85,8 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
       stopSavingVideo(args: args, result: result)
     case "takePictureAsBytes":
       takePictureAsBytes(args: args, result: result)
+    case "isCameraInitialized":
+      isCameraInitialized(result: result)
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -312,6 +314,12 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
                            details: nil))
       }
     }
+  }
+
+  // MARK: - Camera Initialization Check
+  private func isCameraInitialized(result: @escaping FlutterResult) {
+    let initialized = videoCapture.isCameraInitialized()
+    result(initialized)
   }
 
   // MARK: - Listener Methods

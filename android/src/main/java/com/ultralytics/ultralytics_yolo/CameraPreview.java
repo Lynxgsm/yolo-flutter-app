@@ -62,6 +62,10 @@ public class CameraPreview {
         cameraExecutor = Executors.newSingleThreadExecutor();
     }
 
+    public boolean isCameraInitialized() {
+        return cameraControl != null;
+    }
+
     public void openCamera(int facing, Activity activity, PreviewView mPreviewView) {
         this.activity = activity;
         this.mPreviewView = mPreviewView;
