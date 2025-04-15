@@ -29,12 +29,6 @@ public class PermissionHelper {
             permissionsNeeded.add(android.Manifest.permission.CAMERA);
         }
         
-        // Audio recording permission
-        if (ContextCompat.checkSelfPermission(activity, android.Manifest.permission.RECORD_AUDIO) 
-                != PackageManager.PERMISSION_GRANTED) {
-            permissionsNeeded.add(android.Manifest.permission.RECORD_AUDIO);
-        }
-        
         // Storage permissions depend on Android version
         if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
             // Android 9 (Pie) and below
@@ -63,10 +57,6 @@ public class PermissionHelper {
                     != PackageManager.PERMISSION_GRANTED) {
                 permissionsNeeded.add(android.Manifest.permission.READ_MEDIA_VIDEO);
             }
-            if (ContextCompat.checkSelfPermission(activity, android.Manifest.permission.READ_MEDIA_AUDIO) 
-                    != PackageManager.PERMISSION_GRANTED) {
-                permissionsNeeded.add(android.Manifest.permission.READ_MEDIA_AUDIO);
-            }
         }
         
         // Request permissions if needed
@@ -92,12 +82,6 @@ public class PermissionHelper {
             allPermissionsGranted = false;
         }
         
-        // Check audio permission
-        if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) 
-                != PackageManager.PERMISSION_GRANTED) {
-            allPermissionsGranted = false;
-        }
-        
         // Check storage permissions based on Android version
         if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
             // Android 9 (Pie) and below
@@ -118,8 +102,6 @@ public class PermissionHelper {
             if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_MEDIA_IMAGES) 
                     != PackageManager.PERMISSION_GRANTED ||
                 ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_MEDIA_VIDEO) 
-                    != PackageManager.PERMISSION_GRANTED ||
-                ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_MEDIA_AUDIO) 
                     != PackageManager.PERMISSION_GRANTED) {
                 allPermissionsGranted = false;
             }
