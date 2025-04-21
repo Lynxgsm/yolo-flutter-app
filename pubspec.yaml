@@ -22,8 +22,5 @@ dev_dependencies:
 flutter:
   plugin:
     platforms:
-      android:
-        package: com.ultralytics.ultralytics_yolo
-        pluginClass: UltralyticsYoloPlugin
       ios:
         pluginClass: UltralyticsYoloPlugin
