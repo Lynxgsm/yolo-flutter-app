@@ -141,6 +141,20 @@ class UltralyticsYoloCameraController
     }
   }
 
+  /// Sets the confidence threshold for object detection
+  /// Value should be between 0.0 and 1.0
+  Future<void> setConfidenceThreshold(double confidence) async {
+    try {
+      final result =
+          await _ultralyticsYoloPlatform.setConfidenceThreshold(confidence);
+      if (result != 'Success') {
+        throw Exception('Failed to set confidence threshold: $result');
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
   Future<Uint8List?> takePictureAsBytes() async {
     try {
       if (kDebugMode) {

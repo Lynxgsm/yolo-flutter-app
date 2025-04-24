@@ -130,7 +130,7 @@ public class ObjectDetector: Predictor {
     }
   }
 
-  private var confidenceThreshold = 0.2
+  private var confidenceThreshold = 0.4
   public func setConfidenceThreshold(confidence: Double) {
     confidenceThreshold = confidence
     detector.featureProvider = ThresholdProvider(

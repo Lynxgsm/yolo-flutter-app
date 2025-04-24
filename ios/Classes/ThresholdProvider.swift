@@ -17,7 +17,7 @@ public class ThresholdProvider: MLFeatureProvider {
   }
 
   /// Initialize with default values
-  init(iouThreshold: Double = 0.4, confidenceThreshold: Double = 0.2) {
+  init(iouThreshold: Double = 0.4, confidenceThreshold: Double = 0.4) {
     self.values["iouThreshold"] = MLFeatureValue(double: iouThreshold)
     self.values["confidenceThreshold"] = MLFeatureValue(double: confidenceThreshold)
   }
