@@ -130,14 +130,14 @@ public class ObjectDetector: Predictor {
     }
   }
 
-  private var confidenceThreshold = 0.4
+  private var confidenceThreshold = 0.25
   public func setConfidenceThreshold(confidence: Double) {
     confidenceThreshold = confidence
     detector.featureProvider = ThresholdProvider(
       iouThreshold: iouThreshold, confidenceThreshold: confidenceThreshold)
   }
 
-  private var iouThreshold = 0.4
+  private var iouThreshold = 0.25
   public func setIouThreshold(iou: Double) {
     iouThreshold = iou
     detector.featureProvider = ThresholdProvider(
