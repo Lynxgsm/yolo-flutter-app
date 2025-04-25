@@ -16,6 +16,8 @@ public class ObjectDetector: Predictor {
   var t2 = 0.0  // inference dt smoothed
   var t3 = CACurrentMediaTime()  // FPS start
   var t4 = 0.0  // FPS dt smoothed
+  private var numItemsThreshold = 30
+  private var allowedClasses: Set<String> = Set()  // Empty set means all classes are allowed
 
   public init?(yoloModel: any YoloModel) async throws {
     if yoloModel.task != "detect" {
@@ -144,7 +146,18 @@ public class ObjectDetector: Predictor {
       iouThreshold: iouThreshold, confidenceThreshold: confidenceThreshold)
   }
 
-  private var numItemsThreshold = 30
+  public func setAllowedClasses(classes: [String]) {
+    print("ObjectDetector: Setting allowed classes: \(classes)")
+    self.allowedClasses = Set(classes)
+    print("ObjectDetector: Allowed classes set to: \(self.allowedClasses)")
+    
+    // Verify the classes are valid
+    let invalidClasses = classes.filter { !self.labels.contains($0) }
+    if !invalidClasses.isEmpty {
+      print("Warning: Some classes are not in the model's labels: \(invalidClasses)")
+    }
+  }
+
   public func setNumItemsThreshold(numItems: Int) {
     numItemsThreshold = numItems
   }
@@ -208,15 +221,22 @@ public class ObjectDetector: Predictor {
             let label = prediction.labels[0].identifier
             let index = self.labels.firstIndex(of: label) ?? 0
             let confidence = prediction.labels[0].confidence
-            recognitions.append([
-              "label": label,
-              "confidence": confidence,
-              "index": index,
-              "x": rect.origin.x,
-              "y": rect.origin.y,
-              "width": rect.size.width,
-              "height": rect.size.height,
-            ])
+            
+            // Only add recognition if the class is allowed or if no classes are specified
+            if self.allowedClasses.isEmpty || self.allowedClasses.contains(label) {
+              print("Including detection for class: \(label) (confidence: \(confidence))")
+              recognitions.append([
+                "label": label,
+                "confidence": confidence,
+                "index": index,
+                "x": rect.origin.x,
+                "y": rect.origin.y,
+                "width": rect.size.width,
+                "height": rect.size.height,
+              ])
+            } else {
+              print("Skipping detection for class: \(label) (confidence: \(confidence)) - not in allowed classes")
+            }
           }
         }
 
@@ -277,15 +297,22 @@ public class ObjectDetector: Predictor {
             let label = prediction.labels[0].identifier
             let index = self.labels.firstIndex(of: label) ?? 0
             let confidence = prediction.labels[0].confidence
-            recognitions.append([
-              "label": label,
-              "confidence": confidence,
-              "index": index,
-              "x": rect.origin.x,
-              "y": rect.origin.y,
-              "width": rect.size.width,
-              "height": rect.size.height,
-            ])
+            
+            // Only add recognition if the class is allowed or if no classes are specified
+            if self.allowedClasses.isEmpty || self.allowedClasses.contains(label) {
+              print("Including detection for class: \(label) (confidence: \(confidence))")
+              recognitions.append([
+                "label": label,
+                "confidence": confidence,
+                "index": index,
+                "x": rect.origin.x,
+                "y": rect.origin.y,
+                "width": rect.size.width,
+                "height": rect.size.height,
+              ])
+            } else {
+              print("Skipping detection for class: \(label) (confidence: \(confidence)) - not in allowed classes")
+            }
           }
         }
       }

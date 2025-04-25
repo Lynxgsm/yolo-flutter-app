@@ -51,6 +51,11 @@ abstract class UltralyticsYoloPlatform extends PlatformInterface {
     );
   }
 
+  /// Set the allowed classes for object detection.
+  Future<String?> setAllowedClasses(List<String> classes) {
+    throw UnimplementedError('setAllowedClasses has not been implemented.');
+  }
+
   /// Set the zoom ratio for the camera preview.
   Future<String?> setZoomRatio(double ratio) {
     throw UnimplementedError('setZoomRatio has not been implemented.');

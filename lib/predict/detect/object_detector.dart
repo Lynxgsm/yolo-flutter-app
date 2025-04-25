@@ -1,6 +1,7 @@
 import 'package:ultralytics_yolo/predict/detect/detected_object.dart';
 import 'package:ultralytics_yolo/predict/predictor.dart';
 import 'package:ultralytics_yolo/yolo_model.dart';
+import 'package:flutter/foundation.dart';
 
 /// A predictor for object detection.
 class ObjectDetector extends Predictor {
@@ -24,6 +25,25 @@ class ObjectDetector extends Predictor {
   /// Sets the number of items threshold for the detection.
   void setNumItemsThreshold(int numItems) {
     super.ultralyticsYoloPlatform.setNumItemsThreshold(numItems);
+  }
+
+  /// Sets the allowed classes for object detection.
+  Future<void> setAllowedClasses(List<String> classes) async {
+    if (kDebugMode) {
+      print('Setting allowed classes in Flutter: $classes');
+    }
+
+    try {
+      final result =
+          await super.ultralyticsYoloPlatform.setAllowedClasses(classes);
+      if (kDebugMode) {
+        print('Set allowed classes result: $result');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error setting allowed classes: $e');
+      }
+    }
   }
 
   /// Detects objects from the given [imagePath].

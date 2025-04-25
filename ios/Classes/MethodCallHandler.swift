@@ -15,6 +15,7 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
   private let fpsRateStreamHandler: TimeStreamHandler
   private var predictor: Predictor?
   private let videoCapture: VideoCapture
+  private var onResultCallback: (([[String: Any]]) -> Void)?
 
   public init(binaryMessenger: FlutterBinaryMessenger, videoCapture: VideoCapture) {
     self.videoCapture = videoCapture
@@ -63,6 +64,8 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
       setIouThreshold(args: args, result: result)
     case "setNumItemsThreshold":
       setNumItemsThreshold(args: args, result: result)
+    case "setAllowedClasses":
+      setAllowedClasses(args: args, result: result)
     case "setLensDirection":
       setLensDirection(args: args, result: result)
     case "closeCamera":
@@ -85,8 +88,16 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
       stopSavingVideo(args: args, result: result)
     case "takePictureAsBytes":
       takePictureAsBytes(args: args, result: result)
+    case "setOnResultCallback":
+      setOnResultCallback(args: args, result: result)
     default:
       result(FlutterMethodNotImplemented)
+    }
+  }
+
+  private func setOnResultCallback(args: [String: Any], result: @escaping FlutterResult) {
+    onResultCallback = { predictions in
+      result(predictions)
     }
   }
 
@@ -166,6 +177,25 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
     guard let numItems = args["numItems"] as? Int else { return }
     (predictor as? ObjectDetector)?.setNumItemsThreshold(numItems: numItems)
     result(nil)
+  }
+
+  private func setAllowedClasses(args: [String: Any], result: @escaping FlutterResult) {
+    guard let classes = args["classes"] as? [String] else {
+      print("Error: Invalid classes argument")
+      result(FlutterError(code: "INVALID_ARGS", message: "Invalid classes argument", details: nil))
+      return
+    }
+    
+    print("Received allowed classes: \(classes)")
+    
+    if let detector = predictor as? ObjectDetector {
+      detector.setAllowedClasses(classes: classes)
+      print("Successfully set allowed classes on detector")
+      result("Success")
+    } else {
+      print("Error: Predictor is not an ObjectDetector")
+      result(FlutterError(code: "INVALID_PREDICTOR", message: "Predictor is not an ObjectDetector", details: nil))
+    }
   }
 
   private func setLensDirection(args: [String: Any], result: @escaping FlutterResult) {
@@ -316,7 +346,8 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
 
   // MARK: - Listener Methods
   public func on(predictions: [[String: Any]]) {
-    resultStreamHandler.sink(objects: predictions)
+    resultStreamHandler.on(predictions: predictions)
+    onResultCallback?(predictions)
   }
 
   public func on(inferenceTime: Double) {
