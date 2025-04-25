@@ -7,6 +7,7 @@ class UltralyticsYoloCameraValue {
   UltralyticsYoloCameraValue({
     required this.lensDirection,
     required this.strokeWidth,
+    this.showBoxes = true,
   });
 
   /// The direction of the camera lens
@@ -15,15 +16,20 @@ class UltralyticsYoloCameraValue {
   /// The width of the stroke used to draw the bounding boxes
   final double strokeWidth;
 
+  /// Whether to show bounding boxes
+  final bool showBoxes;
+
   /// Creates a copy of this [UltralyticsYoloCameraValue] but with
   /// the given fields
   UltralyticsYoloCameraValue copyWith({
     int? lensDirection,
     double? strokeWidth,
+    bool? showBoxes,
   }) =>
       UltralyticsYoloCameraValue(
         lensDirection: lensDirection ?? this.lensDirection,
         strokeWidth: strokeWidth ?? this.strokeWidth,
+        showBoxes: showBoxes ?? this.showBoxes,
       );
 }
 
@@ -67,6 +73,11 @@ class UltralyticsYoloCameraController
   /// Sets the width of the stroke used to draw the bounding boxes
   void setStrokeWidth(double strokeWidth) {
     value = value.copyWith(strokeWidth: strokeWidth);
+  }
+
+  /// Sets whether to show bounding boxes
+  void setShowBoxes(bool showBoxes) {
+    value = value.copyWith(showBoxes: showBoxes);
   }
 
   /// Closes the camera

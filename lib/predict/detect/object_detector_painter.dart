@@ -12,14 +12,18 @@ class ObjectDetectorPainter extends CustomPainter {
     this._detectionResults, [
     this._colors,
     this._strokeWidth = 2.5,
+    this.showBoxes = true,
   ]);
 
   final List<DetectedObject> _detectionResults;
   final List<Color>? _colors;
   final double _strokeWidth;
+  final bool showBoxes;
 
   @override
   void paint(Canvas canvas, Size size) {
+    if (!showBoxes) return;
+
     final borderPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = _strokeWidth;

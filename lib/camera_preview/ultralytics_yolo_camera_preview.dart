@@ -120,6 +120,7 @@ class _UltralyticsYoloCameraPreviewState
                           snapshot.data! as List<DetectedObject>,
                           widget.boundingBoxesColorList,
                           widget.controller.value.strokeWidth,
+                          widget.controller.value.showBoxes,
                         ),
                       );
                     },
