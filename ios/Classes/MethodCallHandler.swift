@@ -15,6 +15,7 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
   private let fpsRateStreamHandler: TimeStreamHandler
   private var predictor: Predictor?
   private let videoCapture: VideoCapture
+  private var onResultCallback: (([[String: Any]]) -> Void)?
 
   public init(binaryMessenger: FlutterBinaryMessenger, videoCapture: VideoCapture) {
     self.videoCapture = videoCapture
@@ -87,8 +88,16 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
       stopSavingVideo(args: args, result: result)
     case "takePictureAsBytes":
       takePictureAsBytes(args: args, result: result)
+    case "setOnResultCallback":
+      setOnResultCallback(args: args, result: result)
     default:
       result(FlutterMethodNotImplemented)
+    }
+  }
+
+  private func setOnResultCallback(args: [String: Any], result: @escaping FlutterResult) {
+    onResultCallback = { predictions in
+      result(predictions)
     }
   }
 
@@ -337,7 +346,8 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
 
   // MARK: - Listener Methods
   public func on(predictions: [[String: Any]]) {
-    resultStreamHandler.sink(objects: predictions)
+    resultStreamHandler.on(predictions: predictions)
+    onResultCallback?(predictions)
   }
 
   public func on(inferenceTime: Double) {
