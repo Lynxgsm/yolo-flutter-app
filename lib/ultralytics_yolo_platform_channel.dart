@@ -51,6 +51,26 @@ class PlatformChannelUltralyticsYolo implements UltralyticsYoloPlatform {
       .invokeMethod<String>('setNumItemsThreshold', {'numItems': numItems});
 
   @override
+  Future<String?> setAllowedClasses(List<String> classes) async {
+    try {
+      if (kDebugMode) {
+        print('Platform channel: Setting allowed classes: $classes');
+      }
+      final result = await methodChannel
+          .invokeMethod<String>('setAllowedClasses', {'classes': classes});
+      if (kDebugMode) {
+        print('Platform channel: Set allowed classes result: $result');
+      }
+      return result;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Platform channel error setting allowed classes: $e');
+      }
+      return null;
+    }
+  }
+
+  @override
   Future<String?> setZoomRatio(double ratio) =>
       methodChannel.invokeMethod<String>('setZoomRatio', {'ratio': ratio});
 

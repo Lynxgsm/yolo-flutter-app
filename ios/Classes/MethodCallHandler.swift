@@ -63,6 +63,8 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
       setIouThreshold(args: args, result: result)
     case "setNumItemsThreshold":
       setNumItemsThreshold(args: args, result: result)
+    case "setAllowedClasses":
+      setAllowedClasses(args: args, result: result)
     case "setLensDirection":
       setLensDirection(args: args, result: result)
     case "closeCamera":
@@ -166,6 +168,25 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
     guard let numItems = args["numItems"] as? Int else { return }
     (predictor as? ObjectDetector)?.setNumItemsThreshold(numItems: numItems)
     result(nil)
+  }
+
+  private func setAllowedClasses(args: [String: Any], result: @escaping FlutterResult) {
+    guard let classes = args["classes"] as? [String] else {
+      print("Error: Invalid classes argument")
+      result(FlutterError(code: "INVALID_ARGS", message: "Invalid classes argument", details: nil))
+      return
+    }
+    
+    print("Received allowed classes: \(classes)")
+    
+    if let detector = predictor as? ObjectDetector {
+      detector.setAllowedClasses(classes: classes)
+      print("Successfully set allowed classes on detector")
+      result("Success")
+    } else {
+      print("Error: Predictor is not an ObjectDetector")
+      result(FlutterError(code: "INVALID_PREDICTOR", message: "Predictor is not an ObjectDetector", details: nil))
+    }
   }
 
   private func setLensDirection(args: [String: Any], result: @escaping FlutterResult) {
