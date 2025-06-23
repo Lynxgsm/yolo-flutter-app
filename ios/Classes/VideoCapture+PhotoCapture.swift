@@ -76,48 +76,4 @@ extension VideoCapture {
     print("DEBUG: Taking picture with settings: \(photoSettings)")
     photoOutput.capturePhoto(with: photoSettings, delegate: bytesPhotoCaptureDelegate!)
   }
-}
-
-// MARK: - Photo Capture Delegate
-extension VideoCapture {
-  // Helper class for photo capture that returns bytes
-  class BytesPhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDelegate {
-    private let completion: (Data?, Error?) -> Void
-    
-    init(completion: @escaping (Data?, Error?) -> Void) {
-      self.completion = completion
-      super.init()
-      print("DEBUG: BytesPhotoCaptureDelegate initialized")
-    }
-    
-    func photoOutput(_ output: AVCapturePhotoOutput, willBeginCaptureFor resolvedSettings: AVCaptureResolvedPhotoSettings) {
-      print("DEBUG: Will begin photo capture with settings ID: \(resolvedSettings.uniqueID)")
-    }
-    
-    func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
-      print("DEBUG: Did finish processing photo")
-      
-      if let error = error {
-        print("DEBUG: Photo capture error: \(error.localizedDescription)")
-        completion(nil, error)
-        return
-      }
-      
-      guard let imageData = photo.fileDataRepresentation() else {
-        let error = NSError(domain: "PhotoCapture", code: 2, userInfo: [NSLocalizedDescriptionKey: "Could not get image data"])
-        print("DEBUG: Failed to get file data representation")
-        completion(nil, error)
-        return
-      }
-      
-      print("DEBUG: Photo data extracted successfully, size: \(imageData.count) bytes")
-      
-      // Return the image data directly
-      completion(imageData, nil)
-    }
-    
-    deinit {
-      print("DEBUG: BytesPhotoCaptureDelegate deinit")
-    }
-  }
 } 

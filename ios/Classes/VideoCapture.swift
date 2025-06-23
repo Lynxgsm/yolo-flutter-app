@@ -3,7 +3,29 @@ import CoreVideo
 import UIKit
 import Photos
 
-public class VideoCapture: NSObject {
+public protocol VideoCaptureDelegate: AnyObject {
+  func videoCapture(_ capture: VideoCapture, didCaptureVideoFrame: CMSampleBuffer)
+}
+
+func bestCaptureDevice(position: AVCaptureDevice.Position) -> AVCaptureDevice {
+  if UserDefaults.standard.bool(forKey: "use_telephoto"),
+    let device = AVCaptureDevice.default(.builtInTelephotoCamera, for: .video, position: position)
+  {
+    return device
+  } else if let device = AVCaptureDevice.default(
+    .builtInDualCamera, for: .video, position: position)
+  {
+    return device
+  } else if let device = AVCaptureDevice.default(
+    .builtInWideAngleCamera, for: .video, position: position)
+  {
+    return device
+  } else {
+    fatalError("Missing expected back camera device.")
+  }
+}
+
+public class VideoCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCapturePhotoCaptureDelegate, AVCaptureFileOutputRecordingDelegate {
   public var previewLayer: AVCaptureVideoPreviewLayer?
   public weak var delegate: VideoCaptureDelegate?
   public let captureSession = AVCaptureSession()
@@ -148,4 +170,116 @@ public class VideoCapture: NSObject {
       }
     }
   }
-} 
+
+  public func dispose() {
+    print("DEBUG: Disposing VideoCapture")
+    
+    // Stop recording if in progress
+    if isRecording {
+      movieFileOutput.stopRecording()
+      isRecording = false
+    }
+    
+    // Stop frame capturing if in progress
+    if isCapturingFrames {
+      isCapturingFrames = false
+      videoWriterInput?.markAsFinished()
+      videoWriter?.finishWriting { [weak self] in
+        self?.cleanupVideoWriter()
+      }
+    }
+    
+    // Stop the capture session
+    if captureSession.isRunning {
+      captureSession.stopRunning()
+    }
+    
+    // Remove preview layer
+    DispatchQueue.main.async { [weak self] in
+      self?.previewLayer?.removeFromSuperlayer()
+      self?.previewLayer = nil
+    }
+    
+    // Clean up capture session
+    captureSession.beginConfiguration()
+    
+    // Remove all inputs
+    for input in captureSession.inputs {
+      captureSession.removeInput(input)
+    }
+    
+    // Remove all outputs
+    for output in captureSession.outputs {
+      captureSession.removeOutput(output)
+    }
+    
+    captureSession.commitConfiguration()
+    
+    // Clean up delegates and retained objects
+    delegate = nil
+    bytesPhotoCaptureDelegate = nil
+    nativeView = nil
+    
+    // Reset state variables
+    lastCapturedPhoto = nil
+    recordingFilePath = nil
+    
+    cleanupVideoWriter()
+    
+    print("DEBUG: VideoCapture disposed successfully")
+  }
+  
+  private func cleanupVideoWriter() {
+    videoWriter = nil
+    videoWriterInput = nil
+    pixelBufferAdaptor = nil
+    savedVideoPath = nil
+    frameCount = 0
+    startTime = nil
+         lastFrameTime = CMTime.zero
+   }
+ }
+
+ // MARK: - BytesPhotoCaptureDelegate
+ extension VideoCapture {
+   // Helper class for photo capture that returns bytes
+   class BytesPhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDelegate {
+     private let completion: (Data?, Error?) -> Void
+     
+     init(completion: @escaping (Data?, Error?) -> Void) {
+       self.completion = completion
+       super.init()
+       print("DEBUG: BytesPhotoCaptureDelegate initialized")
+     }
+     
+     func photoOutput(_ output: AVCapturePhotoOutput, willBeginCaptureFor resolvedSettings: AVCaptureResolvedPhotoSettings) {
+       print("DEBUG: Will begin photo capture with settings ID: \(resolvedSettings.uniqueID)")
+     }
+     
+     func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
+       print("DEBUG: Did finish processing photo")
+       
+       if let error = error {
+         print("DEBUG: Photo capture error: \(error.localizedDescription)")
+         completion(nil, error)
+         return
+       }
+       
+       guard let imageData = photo.fileDataRepresentation() else {
+         let error = NSError(domain: "PhotoCapture", code: 2, userInfo: [NSLocalizedDescriptionKey: "Could not get image data"])
+         print("DEBUG: Failed to get file data representation")
+         completion(nil, error)
+         return
+       }
+       
+       print("DEBUG: Photo data extracted successfully, size: \(imageData.count) bytes")
+       
+       // Return the image data directly
+       completion(imageData, nil)
+     }
+     
+     deinit {
+       print("DEBUG: BytesPhotoCaptureDelegate deinit")
+     }
+   }
+ } 
