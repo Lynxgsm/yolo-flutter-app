@@ -195,4 +195,11 @@ class UltralyticsYoloCameraController
       return null;
     }
   }
+
+  /// Disposes the camera controller and releases resources
+  @override
+  void dispose() {
+    _ultralyticsYoloPlatform.dispose();
+    super.dispose();
+  }
 }

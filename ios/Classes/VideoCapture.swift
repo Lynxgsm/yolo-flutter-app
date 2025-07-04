@@ -1091,3 +1091,31 @@ extension VideoCapture: AVCaptureFileOutputRecordingDelegate {
     }
   }
 }
+
+// Add dispose method for cleanup
+extension VideoCapture {
+    public func dispose() {
+        print("DEBUG: Disposing VideoCapture resources")
+        // Stop the session if running
+        if captureSession.isRunning {
+            captureSession.stopRunning()
+        }
+        // Remove all inputs
+        for input in captureSession.inputs {
+            captureSession.removeInput(input)
+        }
+        // Remove all outputs
+        for output in captureSession.outputs {
+            captureSession.removeOutput(output)
+        }
+        // Release preview layer
+        previewLayer?.removeFromSuperlayer()
+        previewLayer = nil
+        delegate = nil
+        nativeView = nil
+        // Release video/photo/movie outputs if needed
+        // (not strictly necessary, but for completeness)
+        // No explicit deallocation needed for AVFoundation objects
+        print("DEBUG: VideoCapture disposed")
+    }
+}

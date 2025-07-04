@@ -217,4 +217,9 @@ class PlatformChannelUltralyticsYolo implements UltralyticsYoloPlatform {
       return null;
     }
   }
+
+  @override
+  void dispose() {
+    methodChannel.invokeMethod<void>('dispose');
+  }
 }

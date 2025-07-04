@@ -90,6 +90,8 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
       takePictureAsBytes(args: args, result: result)
     case "setOnResultCallback":
       setOnResultCallback(args: args, result: result)
+    case "dispose":
+      dispose(args: args, result: result)
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -356,5 +358,15 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
 
   public func on(fpsRate: Double) {
     fpsRateStreamHandler.sink(time: fpsRate)
+  }
+
+  private func dispose(args: [String: Any], result: @escaping FlutterResult) {
+    print("DEBUG: [MethodCallHandler] Disposing camera resources via platform channel")
+    if let objectDetector = predictor as? ObjectDetector {
+      objectDetector.dispose()
+    }
+    predictor = nil
+    videoCapture.dispose()
+    result("Disposed")
   }
 }

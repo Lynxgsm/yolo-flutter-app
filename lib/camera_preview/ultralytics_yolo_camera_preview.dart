@@ -198,4 +198,10 @@ class _UltralyticsYoloCameraPreviewState
       },
     );
   }
+
+  @override
+  void dispose() {
+    widget.controller.dispose();
+    super.dispose();
+  }
 }

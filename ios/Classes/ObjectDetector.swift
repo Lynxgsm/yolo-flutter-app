@@ -322,4 +322,18 @@ public class ObjectDetector: Predictor {
 
     completion(recognitions)
   }
+
+  public func dispose() {
+    currentOnResultsListener = nil
+    currentOnInferenceTimeListener = nil
+    currentOnFpsRateListener = nil
+    visionRequest = nil
+    detector = nil
+    currentBuffer = nil
+    print("DEBUG: ObjectDetector disposed")
+  }
+
+  deinit {
+    print("DEBUG: ObjectDetector deinit")
+  }
 }

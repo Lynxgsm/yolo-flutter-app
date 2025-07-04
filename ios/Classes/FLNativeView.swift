@@ -117,4 +117,11 @@ public class FLNativeView: NSObject, FlutterPlatformView, VideoCaptureDelegate {
     // Forward frames to the method handler
     methodHandler?.videoCapture(capture, didCaptureVideoFrame: sampleBuffer)
   }
+
+  // MARK: - Cleanup
+  public func dispose() {
+    print("DEBUG: Disposing FLNativeView and cleaning up camera resources")
+    videoCapture.dispose()
+    previewView.layer.sublayers?.forEach { $0.removeFromSuperlayer() }
+  }
 }

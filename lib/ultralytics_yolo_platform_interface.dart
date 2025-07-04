@@ -142,4 +142,9 @@ abstract class UltralyticsYoloPlatform extends PlatformInterface {
   Future<Uint8List?> takePictureAsBytes() {
     throw UnimplementedError('takePictureAsBytes has not been implemented.');
   }
+
+  /// Dispose the camera.
+  void dispose() {
+    throw UnimplementedError('dispose has not been implemented.');
+  }
 }
