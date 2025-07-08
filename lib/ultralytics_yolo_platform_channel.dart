@@ -186,9 +186,9 @@ class PlatformChannelUltralyticsYolo implements UltralyticsYoloPlatform {
   }
 
   @override
-  Future<String?> startRecording() => methodChannel
-      .invokeMethod<String>('startRecording')
-      .catchError((dynamic e) => e.toString());
+  Future<String?> startRecording({bool withAudio = true}) =>
+      methodChannel.invokeMethod<String>('startRecording',
+          {'withAudio': withAudio}).catchError((dynamic e) => e.toString());
 
   @override
   Future<String?> stopRecording() => methodChannel

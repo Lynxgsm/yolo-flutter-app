@@ -274,7 +274,8 @@ public class MethodCallHandler: NSObject, VideoCaptureDelegate, InferenceTimeLis
 
   // MARK: - Video Recording Methods
   private func startRecording(args: [String: Any], result: @escaping FlutterResult) {
-    let response = videoCapture.startRecording()
+    let withAudio = args["withAudio"] as? Bool ?? true
+    let response = videoCapture.startRecording(withAudio: withAudio)
     if response.starts(with: "Error") {
       result(FlutterError(code: "RECORDING_ERROR", message: response, details: nil))
     } else {

@@ -50,6 +50,7 @@ public class VideoCapture: NSObject {
   private var lastFrameTime = CMTime.zero
   private var savedVideoPath: URL?
   private var recordingFilePath: URL?
+  private var audioInput: AVCaptureDeviceInput?
 
   public override init() {
     super.init()
@@ -287,13 +288,36 @@ public class VideoCapture: NSObject {
   
   // MARK: - Recording Methods
   
-  public func startRecording() -> String {
+  public func startRecording(withAudio: Bool = true) -> String {
     if isRecording {
       return "Error: Already recording"
     }
     
     if !captureSession.isRunning {
       return "Error: Camera not running"
+    }
+    
+    // Remove existing audio input if present
+    if let audioInput = audioInput, captureSession.inputs.contains(audioInput) {
+      captureSession.removeInput(audioInput)
+      self.audioInput = nil
+    }
+    // Add audio input if requested
+    if withAudio {
+      if let audioDevice = AVCaptureDevice.default(for: .audio) {
+        do {
+          let newAudioInput = try AVCaptureDeviceInput(device: audioDevice)
+          if captureSession.canAddInput(newAudioInput) {
+            captureSession.addInput(newAudioInput)
+            self.audioInput = newAudioInput
+            print("DEBUG: Added audio input")
+          }
+        } catch {
+          print("DEBUG: Failed to add audio input: \(error.localizedDescription)")
+        }
+      } else {
+        print("DEBUG: No audio device available")
+      }
     }
     
     // Create a unique file path in the Documents directory

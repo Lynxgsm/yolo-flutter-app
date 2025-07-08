@@ -86,9 +86,10 @@ class UltralyticsYoloCameraController
   }
 
   // Start recording
-  Future<void> startRecording() async {
+  Future<void> startRecording({bool withAudio = true}) async {
     try {
-      final result = await _ultralyticsYoloPlatform.startRecording();
+      final result =
+          await _ultralyticsYoloPlatform.startRecording(withAudio: withAudio);
       if (result != 'Success') {
         throw Exception('Failed to start recording: $result');
       }
