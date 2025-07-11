@@ -119,7 +119,7 @@ abstract class UltralyticsYoloPlatform extends PlatformInterface {
   }
 
   /// Start recording video with object detection overlays
-  Future<String?> startRecording() {
+  Future<String?> startRecording({bool withAudio = true}) {
     throw UnimplementedError('startRecording has not been implemented.');
   }
 
